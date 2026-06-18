@@ -1,99 +1,223 @@
-import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { Package, MessageCircle, Clock, CheckCircle2, XCircle, ChevronRight, MapPin, DollarSign } from "lucide-react";
 import { buyerApi } from "../../api/buyer";
-import { chatApi } from "../../api/resources";
+import { chatApi, bookingsApi } from "../../api/resources";
 import { useToast } from "../../context/ToastContext";
-import { extractErrorMessage } from "../../utils/format";
-import { PageLoader, EmptyState, Badge } from "../../components/common/Feedback";
-import { formatCurrency, formatDateTime } from "../../utils/format";
-import { ShoppingBag, MessageCircle } from "lucide-react";
-import Button from "../../components/common/Button";
+import Modal from "../../components/ui/Modal";
+import { StatusBadge } from "../../components/ui/Badge";
+import { SkeletonTable } from "../../components/ui/Skeleton";
+import EmptyState from "../../components/ui/EmptyState";
+import { format, parseISO } from "date-fns";
 
 export default function MyRequests() {
-  const navigate = useNavigate();
-  const toast = useToast();
   const [requests, setRequests] = useState([]);
+  const [filtered, setFiltered] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [chatLoading, setChatLoading] = useState(null);
+  const [filter, setFilter] = useState("all");
+  
+  // Booking Modal
+  const [bookModal, setBookModal] = useState(null);
+  const [bookForm, setBookForm] = useState({ delivery_address: "", payment_method: "cash" });
+  const [booking, setBooking] = useState(false);
 
-  useEffect(() => {
-    const fetch = async () => {
-      try {
-        const res = await buyerApi.getMyRequests();
-        setRequests(res.data || []);
-      } catch {
-        setRequests([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetch();
-  }, []);
+  const toast = useToast();
+  const navigate = useNavigate();
 
-  const handleChat = async (req) => {
-    setChatLoading(req.id);
+  const load = async () => {
+    setLoading(true);
     try {
-      const res = await chatApi.createConversation(req.farmer_id);
-      navigate("/chat", { state: { conversation: res.data } });
-    } catch (err) {
-      toast.error(extractErrorMessage(err) || "Failed to start chat");
-    } finally {
-      setChatLoading(null);
-    }
+      const res = await buyerApi.getMyRequests();
+      setRequests(res.data || []);
+    } catch { toast.error("Failed to load requests"); }
+    finally { setLoading(false); }
   };
 
-  if (loading) return <PageLoader />;
+  useEffect(() => { load(); }, []);
+
+  useEffect(() => {
+    setFiltered(filter === "all" ? requests : requests.filter(r => r.status === filter));
+  }, [requests, filter]);
+
+  const handleChat = async (farmerId) => {
+    try {
+      const res = await chatApi.createConversation(farmerId);
+      navigate("/chat", { state: { conversationId: res.data?.id } });
+    } catch { toast.error("Could not start chat"); }
+  };
+
+  const openBook = (req) => {
+    setBookModal(req);
+    setBookForm({ delivery_address: "", payment_method: "cash" });
+  };
+
+  const handleBook = async (e) => {
+    e.preventDefault();
+    if (!bookForm.delivery_address.trim()) { toast.error("Delivery address required"); return; }
+    setBooking(true);
+    try {
+      await bookingsApi.create({
+        request_id: bookModal.id,
+        crop_id: bookModal.crop_id,
+        quantity: bookModal.quantity,
+        total_price: bookModal.proposed_price ? bookModal.proposed_price * bookModal.quantity : null, // Backend should ideally handle exact calc
+        delivery_address: bookForm.delivery_address,
+        payment_method: bookForm.payment_method,
+      });
+      toast.success("Crop booked successfully!");
+      setBookModal(null);
+      load(); // Reload to update status if backend changes it
+      navigate("/buyer/bookings");
+    } catch (err) { toast.error(err?.response?.data?.detail || "Booking failed"); }
+    finally { setBooking(false); }
+  };
+
+  const tabs = [
+    { key: "all", label: "All", count: requests.length },
+    { key: "pending", label: "Pending", count: requests.filter(r=>r.status==="pending").length },
+    { key: "accepted", label: "Accepted", count: requests.filter(r=>r.status==="accepted").length },
+    { key: "rejected", label: "Rejected", count: requests.filter(r=>r.status==="rejected").length },
+  ];
 
   return (
-    <div>
-      <div className="mb-6">
-        <h1 className="font-display text-2xl font-semibold text-ink">My Requests</h1>
-        <p className="mt-1 text-sm text-ink-soft">Track your purchase requests to farmers</p>
+    <div className="page-enter space-y-6">
+      <div className="page-header">
+        <h1 className="page-title">My Requests</h1>
+        <p className="page-subtitle">Track your purchase requests and book accepted ones</p>
       </div>
 
-      {requests.length === 0 ? (
-        <EmptyState
-          icon={<ShoppingBag size={40} />}
-          title="No requests sent"
-          description="Browse the marketplace and send requests for crops you need."
-        />
-      ) : (
-        <div className="space-y-3">
-          {requests.map((req) => (
-            <div key={req.id} className="rounded-xl border border-paddy-100 bg-white p-5 shadow-sm">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-semibold text-ink">{req.crop_name}</h3>
-                    <Badge tone={req.status === "pending" ? "gold" : req.status === "accepted" ? "paddy" : "terracotta"}>
-                      {req.status}
-                    </Badge>
-                  </div>
-                  <div className="mt-2 space-y-0.5 text-sm text-ink-soft">
-                    <p>Quantity: <span className="font-semibold text-ink">{req.quantity} kg</span></p>
-                    {req.proposed_price && (
-                      <p>Proposed Price: <span className="font-semibold text-ink">{formatCurrency(req.proposed_price)}</span></p>
-                    )}
-                    <p className="text-xs text-ink-soft/60">{formatDateTime(req.created_at)}</p>
-                  </div>
-                </div>
-                {(req.status === "accepted" || req.status === "completed") && (
-                  <div className="flex shrink-0">
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => handleChat(req)}
-                      loading={chatLoading === req.id}
-                    >
-                      <MessageCircle size={14} /> Chat
-                    </Button>
-                  </div>
-                )}
-              </div>
-            </div>
+      {/* Summary cards */}
+      {!loading && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          {tabs.map(({ key, label, count }) => (
+            <button key={key} onClick={() => setFilter(key)}
+              className={`p-4 rounded-xl border-2 text-left transition-all ${filter === key ? "border-blue-500 bg-blue-50" : "border-slate-200 bg-white hover:border-slate-300"}`}>
+              <p className={`text-2xl font-bold ${filter === key ? "text-blue-700" : "text-slate-800"}`}>{count}</p>
+              <p className={`text-sm mt-0.5 ${filter === key ? "text-blue-600" : "text-slate-500"}`}>{label}</p>
+            </button>
           ))}
         </div>
       )}
+
+      {loading ? (
+        <SkeletonTable rows={5} />
+      ) : filtered.length === 0 ? (
+        <div className="card">
+          <EmptyState
+            type="requests"
+            title={filter !== "all" ? `No ${filter} requests` : "No requests yet"}
+            description="Go to the marketplace to request crops from farmers."
+            action={() => navigate("/buyer/marketplace")}
+            actionLabel="Browse Marketplace"
+          />
+        </div>
+      ) : (
+        <div className="table-wrapper">
+          <table className="w-full text-sm">
+            <thead className="table-header">
+              <tr className="text-xs text-slate-500 uppercase tracking-wider">
+                <th className="text-left px-5 py-3 font-semibold">Crop</th>
+                <th className="text-left px-4 py-3 font-semibold">Farmer</th>
+                <th className="text-left px-4 py-3 font-semibold">Quantity</th>
+                <th className="text-left px-4 py-3 font-semibold">Proposed Price</th>
+                <th className="text-left px-4 py-3 font-semibold">Date</th>
+                <th className="text-left px-4 py-3 font-semibold">Status</th>
+                <th className="text-left px-4 py-3 font-semibold">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {filtered.map((req, i) => (
+                <tr key={req.id} className="table-row animate-fade-in" style={{ animationDelay: `${i * 40}ms` }}>
+                  <td className="px-5 py-4">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-lg bg-green-50 flex items-center justify-center">
+                        <Package size={14} className="text-green-600" />
+                      </div>
+                      <p className="font-semibold text-slate-800">{req.crop_name || req.crops?.name || "Crop"}</p>
+                    </div>
+                  </td>
+                  <td className="px-4 py-4 text-slate-700">{req.farmer_name || req["users!farmer_id"]?.name || "Farmer"}</td>
+                  <td className="px-4 py-4 text-slate-700 font-medium">{req.quantity} units</td>
+                  <td className="px-4 py-4 font-semibold text-slate-900">
+                    {req.proposed_price ? `₹${req.proposed_price}` : <span className="text-slate-400 font-normal text-xs">Standard</span>}
+                  </td>
+                  <td className="px-4 py-4 text-slate-500 text-xs">
+                    {req.created_at ? format(parseISO(req.created_at), "dd MMM yy") : "—"}
+                  </td>
+                  <td className="px-4 py-4"><StatusBadge status={req.status} /></td>
+                  <td className="px-4 py-4">
+                    <div className="flex gap-2">
+                      {req.status === "accepted" && (
+                        <button onClick={() => openBook(req)} className="btn btn-primary btn-sm">
+                          Book Now
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleChat(req.farmer_id || req["users!farmer_id"]?.id)}
+                        className="btn btn-secondary btn-sm btn-icon"
+                        title="Chat with farmer"
+                      >
+                        <MessageCircle size={13} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Booking Modal */}
+      <Modal
+        open={!!bookModal}
+        onClose={() => setBookModal(null)}
+        title="Confirm Booking"
+        subtitle={`Finalize booking for ${bookModal?.crop_name || "Crop"}`}
+        size="md"
+      >
+        {bookModal && (
+          <form onSubmit={handleBook} className="space-y-4">
+            <div className="bg-blue-50 rounded-xl p-4 mb-4 border border-blue-100">
+              <h3 className="font-bold text-blue-900 mb-2">Order Summary</h3>
+              <div className="space-y-1 text-sm text-blue-800">
+                <div className="flex justify-between"><p>Crop</p> <p className="font-semibold">{bookModal.crop_name || bookModal.crops?.name}</p></div>
+                <div className="flex justify-between"><p>Quantity</p> <p className="font-semibold">{bookModal.quantity} units</p></div>
+                {bookModal.proposed_price && (
+                  <div className="flex justify-between"><p>Price/Unit</p> <p className="font-semibold">₹{bookModal.proposed_price}</p></div>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1.5">Delivery Address <span className="text-red-500">*</span></label>
+              <div className="relative">
+                <MapPin size={15} className="absolute left-3 top-3 text-slate-400" />
+                <textarea
+                  value={bookForm.delivery_address} onChange={e => setBookForm(f => ({ ...f, delivery_address: e.target.value }))}
+                  rows={3} placeholder="Full address with pin code"
+                  className="input-field pl-9 resize-none" required
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1.5">Payment Method <span className="text-red-500">*</span></label>
+              <select value={bookForm.payment_method} onChange={e => setBookForm(f => ({ ...f, payment_method: e.target.value }))} className="input-field">
+                <option value="cash">Cash on Delivery</option>
+                <option value="online">Online Payment</option>
+              </select>
+            </div>
+
+            <div className="flex gap-3 pt-2 justify-end border-t border-slate-100">
+              <button type="button" onClick={() => setBookModal(null)} className="btn btn-secondary">Cancel</button>
+              <button type="submit" disabled={booking} className="btn btn-primary">
+                {booking ? "Booking..." : "Confirm Booking"}
+              </button>
+            </div>
+          </form>
+        )}
+      </Modal>
     </div>
   );
 }

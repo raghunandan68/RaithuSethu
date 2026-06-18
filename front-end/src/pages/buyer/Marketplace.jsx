@@ -1,144 +1,254 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { Search, Filter, Sprout, MapPin, Package, Send, X, Zap } from "lucide-react";
 import { buyerApi } from "../../api/buyer";
 import { flashSalesApi } from "../../api/resources";
-import { PageLoader, EmptyState, Badge } from "../../components/common/Feedback";
-import CropCard from "../../components/crop/CropCard";
-import { Field, Input, Select } from "../../components/common/Field";
-import { CROP_CATEGORIES } from "../../utils/format";
-import { formatCurrency, formatDateTime } from "../../utils/format";
-import { Filter, Search, Clock, Zap } from "lucide-react";
+import { useToast } from "../../context/ToastContext";
+import Modal from "../../components/ui/Modal";
+import { StatusBadge, CategoryBadge } from "../../components/ui/Badge";
+import { SkeletonCropCards } from "../../components/ui/Skeleton";
+import EmptyState from "../../components/ui/EmptyState";
+import { format, parseISO } from "date-fns";
+
+const CATEGORIES = ["Vegetables", "Fruits", "Grains", "Dairy", "Spices", "Pulses", "Others"];
 
 export default function Marketplace() {
   const [crops, setCrops] = useState([]);
   const [flashSales, setFlashSales] = useState([]);
+  const [filtered, setFiltered] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filters, setFilters] = useState({
-    search: "",
-    category: "",
-    location: "",
-    min_price: "",
-    max_price: "",
-  });
-  const [showFilters, setShowFilters] = useState(false);
+  
+  // Filters
+  const [search, setSearch] = useState("");
+  const [catFilter, setCatFilter] = useState("");
+  const [maxPrice, setMaxPrice] = useState("");
 
-  const fetch = async () => {
+  // Request Modal
+  const [reqModal, setReqModal] = useState(null);
+  const [reqForm, setReqForm] = useState({ quantity: "", proposed_price: "", message: "" });
+  const [requesting, setRequesting] = useState(false);
+  const toast = useToast();
+
+  const load = async () => {
     setLoading(true);
     try {
-      const params = {};
-      if (filters.search) params.search = filters.search;
-      if (filters.category) params.category = filters.category;
-      if (filters.location) params.location = filters.location;
-      if (filters.min_price) params.min_price = filters.min_price;
-      if (filters.max_price) params.max_price = filters.max_price;
-
-      const [cropsRes, fsRes] = await Promise.all([
-        buyerApi.getMarketplaceCrops(params),
+      const [cropsRes, salesRes] = await Promise.all([
+        buyerApi.getAvailableCrops(),
         flashSalesApi.getAll(true),
       ]);
-      setCrops(cropsRes.data || []);
-      setFlashSales(fsRes.data || []);
-    } catch {
-      setCrops([]);
-    } finally {
-      setLoading(false);
-    }
+      const activeCrops = (cropsRes.data || []).filter(c => c.status === "active");
+      setCrops(activeCrops);
+      setFlashSales(salesRes.data || []);
+    } catch { toast.error("Failed to load marketplace"); }
+    finally { setLoading(false); }
   };
 
-  useEffect(() => { fetch(); }, []);
+  useEffect(() => { load(); }, []);
 
-  const handleFilterChange = (e) => setFilters({ ...filters, [e.target.name]: e.target.value });
+  useEffect(() => {
+    let f = crops;
+    if (search) f = f.filter(c => c.name.toLowerCase().includes(search.toLowerCase()) || c.location?.toLowerCase().includes(search.toLowerCase()));
+    if (catFilter) f = f.filter(c => c.category?.toLowerCase() === catFilter.toLowerCase());
+    if (maxPrice) f = f.filter(c => c.price_per_unit <= Number(maxPrice));
+    setFiltered(f);
+  }, [crops, search, catFilter, maxPrice]);
 
-  const handleSearch = (e) => {
+  const openRequest = (crop) => {
+    setReqModal(crop);
+    setReqForm({ quantity: crop.quantity, proposed_price: crop.price_per_unit, message: "" });
+  };
+
+  const handleRequest = async (e) => {
     e.preventDefault();
-    fetch();
+    const qty = Number(reqForm.quantity);
+    if (!qty || qty <= 0 || qty > reqModal.quantity) { toast.error(`Quantity must be between 1 and ${reqModal.quantity}`); return; }
+    setRequesting(true);
+    try {
+      await buyerApi.createPurchaseRequest({
+        crop_id: reqModal.id,
+        quantity: qty,
+        proposed_price: reqForm.proposed_price ? Number(reqForm.proposed_price) : null,
+        message: reqForm.message,
+      });
+      toast.success("Purchase request sent to farmer!");
+      setReqModal(null);
+    } catch (err) { toast.error(err?.response?.data?.detail || "Failed to send request"); }
+    finally { setRequesting(false); }
   };
+
+  // Enhance crops with flash sale data if applicable
+  const enhancedFiltered = filtered.map(crop => {
+    const sale = flashSales.find(s => s.crop_id === crop.id);
+    if (!sale) return crop;
+    const discounted = crop.price_per_unit - (crop.price_per_unit * sale.discount_percentage / 100);
+    return { ...crop, flashSale: sale, discountedPrice: discounted };
+  });
 
   return (
-    <div>
-      <div className="mb-6">
-        <h1 className="font-display text-2xl font-semibold text-ink">Marketplace</h1>
-        <p className="mt-1 text-sm text-ink-soft">Browse fresh crops from local farmers</p>
+    <div className="page-enter space-y-6">
+      <div className="page-header">
+        <h1 className="page-title">Marketplace</h1>
+        <p className="page-subtitle">Browse fresh produce directly from verified farmers</p>
       </div>
 
-      {flashSales.length > 0 && (
-        <div className="mb-6 overflow-x-auto">
-          <div className="flex gap-3 pb-2">
-            {flashSales.map((fs) => (
-              <div
-                key={fs.id}
-                className="flex shrink-0 items-center gap-3 rounded-xl border border-gold-200 bg-gold-50 px-4 py-3"
-              >
-                <Zap size={20} className="text-gold-500" />
-                <div>
-                  <p className="text-sm font-semibold text-ink">{fs.crops?.name || fs.crop_name}</p>
-                  <p className="text-xs text-gold-600 font-bold">{fs.discount_percentage}% OFF</p>
-                  <p className="text-[10px] text-ink-soft/60">Ends {formatDateTime(fs.end_time)}</p>
-                </div>
-              </div>
-            ))}
-          </div>
+      {/* Filters */}
+      <div className="card p-4 flex flex-wrap gap-3">
+        <div className="relative flex-1 min-w-[200px]">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Search crops, locations..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="input-field pl-9"
+          />
         </div>
-      )}
-
-      <div className="mb-6">
-        <form onSubmit={handleSearch} className="flex items-center gap-3">
-          <div className="relative flex-1">
-            <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-soft/50" />
-            <Input
-              name="search"
-              value={filters.search}
-              onChange={handleFilterChange}
-              placeholder="Search crops..."
-              className="pl-9"
-            />
-          </div>
-          <button
-            type="button"
-            onClick={() => setShowFilters(!showFilters)}
-            className={`flex items-center gap-1.5 rounded-lg border px-3.5 py-2.5 text-sm font-semibold transition-colors ${
-              showFilters ? "bg-paddy-800 text-cream border-paddy-800" : "border-paddy-200 text-ink-soft hover:bg-paddy-50"
-            }`}
-          >
-            <Filter size={15} /> Filters
+        <select value={catFilter} onChange={e => setCatFilter(e.target.value)} className="input-field w-40">
+          <option value="">All Categories</option>
+          {CATEGORIES.map(c => <option key={c}>{c}</option>)}
+        </select>
+        <div className="relative w-40">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-semibold">₹</span>
+          <input
+            type="number"
+            placeholder="Max Price"
+            value={maxPrice}
+            onChange={e => setMaxPrice(e.target.value)}
+            className="input-field pl-8"
+          />
+        </div>
+        {(search || catFilter || maxPrice) && (
+          <button onClick={() => { setSearch(""); setCatFilter(""); setMaxPrice(""); }} className="btn btn-secondary btn-sm px-3">
+            <X size={14} />
           </button>
-          <button
-            type="submit"
-            className="rounded-lg bg-paddy-800 px-4 py-2.5 text-sm font-semibold text-cream hover:bg-paddy-700"
-          >
-            Search
-          </button>
-        </form>
-
-        {showFilters && (
-          <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4 rounded-xl border border-paddy-100 bg-white p-4">
-            <Select name="category" value={filters.category} onChange={handleFilterChange}>
-              <option value="">All Categories</option>
-              {CROP_CATEGORIES.map((c) => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </Select>
-            <Input name="location" value={filters.location} onChange={handleFilterChange} placeholder="Location" />
-            <Input type="number" name="min_price" value={filters.min_price} onChange={handleFilterChange} placeholder="Min price" />
-            <Input type="number" name="max_price" value={filters.max_price} onChange={handleFilterChange} placeholder="Max price" />
-          </div>
         )}
       </div>
 
       {loading ? (
-        <PageLoader />
-      ) : crops.length === 0 ? (
-        <EmptyState
-          icon={<Search size={40} />}
-          title="No crops found"
-          description="Try adjusting your filters or check back later."
-        />
+        <SkeletonCropCards count={6} />
+      ) : enhancedFiltered.length === 0 ? (
+        <div className="card">
+          <EmptyState
+            type="search"
+            title="No crops found"
+            description="Try adjusting your filters or search terms."
+          />
+        </div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {crops.map((crop) => (
-            <CropCard key={crop.id} crop={crop} />
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+          {enhancedFiltered.map((crop, i) => (
+            <div key={crop.id} className={`card overflow-hidden animate-fade-in group ${crop.flashSale ? "border-amber-200" : ""}`} style={{ animationDelay: `${i * 40}ms` }}>
+              {/* Image / Header area */}
+              <div className="relative h-44 bg-slate-100 flex items-center justify-center overflow-hidden">
+                {crop.images && crop.images.length > 0 ? (
+                  <img src={crop.images[0]} alt={crop.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                ) : (
+                  <Sprout size={48} className="text-green-200 group-hover:scale-110 transition-transform duration-500" />
+                )}
+                {/* Badges */}
+                <div className="absolute top-3 left-3 flex flex-col gap-2">
+                  <CategoryBadge category={crop.category} />
+                  {crop.flashSale && (
+                    <span className="badge-flash text-xs px-2 py-0.5 rounded-full flex items-center gap-1 shadow-md">
+                      <Zap size={10} /> {crop.flashSale.discount_percentage}% OFF
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Content */}
+              <div className="p-4 space-y-3">
+                <div>
+                  <h3 className="font-bold text-slate-900 text-lg truncate">{crop.name}</h3>
+                  <div className="flex items-center gap-1.5 text-xs text-slate-500 mt-1">
+                    <MapPin size={12} /> {crop.location || "Location not specified"}
+                  </div>
+                </div>
+
+                <div className="flex items-end justify-between">
+                  <div>
+                    {crop.flashSale ? (
+                      <>
+                        <p className="text-xs text-slate-400 line-through">₹{crop.price_per_unit}/{crop.unit}</p>
+                        <p className="text-xl font-bold text-green-700">₹{crop.discountedPrice.toFixed(2)}<span className="text-sm font-semibold text-slate-500">/{crop.unit}</span></p>
+                      </>
+                    ) : (
+                      <p className="text-xl font-bold text-slate-900">₹{crop.price_per_unit}<span className="text-sm font-semibold text-slate-500">/{crop.unit}</span></p>
+                    )}
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-slate-500">Available</p>
+                    <p className="text-sm font-bold text-slate-800">{crop.quantity} {crop.unit}</p>
+                  </div>
+                </div>
+
+                <div className="pt-3 border-t border-slate-100">
+                  <button onClick={() => openRequest(crop)} className="btn btn-primary w-full">
+                    <Package size={15} /> Request to Buy
+                  </button>
+                </div>
+              </div>
+            </div>
           ))}
         </div>
       )}
+
+      {/* Request Modal */}
+      <Modal
+        open={!!reqModal}
+        onClose={() => setReqModal(null)}
+        title="Send Purchase Request"
+        subtitle={reqModal ? `To farmer for ${reqModal.name}` : ""}
+        size="sm"
+      >
+        {reqModal && (
+          <form onSubmit={handleRequest} className="space-y-4">
+            <div className="bg-slate-50 rounded-xl p-4 flex justify-between items-center mb-2">
+              <div>
+                <p className="text-xs text-slate-500">Available</p>
+                <p className="text-sm font-bold text-slate-800">{reqModal.quantity} {reqModal.unit}</p>
+              </div>
+              <div className="text-right">
+                <p className="text-xs text-slate-500">Asking Price</p>
+                <p className="text-sm font-bold text-green-700">₹{reqModal.flashSale ? reqModal.discountedPrice.toFixed(2) : reqModal.price_per_unit}/{reqModal.unit}</p>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1.5">Quantity you need ({reqModal.unit}) <span className="text-red-500">*</span></label>
+              <input
+                type="number" min="0.1" max={reqModal.quantity} step="0.1"
+                value={reqForm.quantity} onChange={e => setReqForm(f => ({...f, quantity: e.target.value}))}
+                className="input-field" required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1.5">Proposed Price (₹/{reqModal.unit})</label>
+              <input
+                type="number" min="0.01" step="0.01"
+                value={reqForm.proposed_price} onChange={e => setReqForm(f => ({...f, proposed_price: e.target.value}))}
+                placeholder={`Leave blank to accept ₹${reqModal.flashSale ? reqModal.discountedPrice.toFixed(2) : reqModal.price_per_unit}`}
+                className="input-field"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1.5">Message to Farmer</label>
+              <textarea
+                value={reqForm.message} onChange={e => setReqForm(f => ({...f, message: e.target.value}))}
+                rows={3} placeholder="Ask about quality, delivery options..."
+                className="input-field resize-none"
+              />
+            </div>
+
+            <div className="flex gap-3 pt-4 border-t border-slate-100">
+              <button type="button" onClick={() => setReqModal(null)} className="btn btn-secondary flex-1">Cancel</button>
+              <button type="submit" disabled={requesting} className="btn btn-primary flex-1">
+                {requesting ? "Sending..." : <><Send size={15} /> Send Request</>}
+              </button>
+            </div>
+          </form>
+        )}
+      </Modal>
     </div>
   );
 }

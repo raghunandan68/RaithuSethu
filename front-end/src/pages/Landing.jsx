@@ -1,481 +1,342 @@
-import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
-import { 
-  Sprout, 
-  ShoppingBag, 
-  MessageSquare, 
-  Zap, 
-  TrendingUp, 
-  Shield, 
-  Globe, 
-  Bell, 
-  LogOut, 
-  ArrowRight, 
-  Star, 
-  Users,
-  Timer,
-  CheckCircle,
-  Coins,
-  ChevronLeft,
-  ChevronRight
+import {
+  Leaf, ArrowRight, Sprout, ShoppingBag, Zap, MessageCircle,
+  TrendingUp, Shield, Star, CheckCircle2, Users, Package, BarChart3,
+  ChevronRight, Play, Globe2, Clock, Award,
 } from "lucide-react";
+import { useAuth } from "../context/AuthContext";
+
+const STATS = [
+  { label: "Active Farmers", value: "12,458+", icon: Sprout, color: "text-green-600", bg: "bg-green-50" },
+  { label: "Registered Buyers", value: "8,756+", icon: ShoppingBag, color: "text-blue-600", bg: "bg-blue-50" },
+  { label: "Orders Completed", value: "24,560+", icon: Package, color: "text-purple-600", bg: "bg-purple-50" },
+  { label: "Food Saved (Tons)", value: "1,245", icon: Award, color: "text-amber-600", bg: "bg-amber-50" },
+];
+
+const FEATURES = [
+  {
+    icon: Globe2, title: "Live Marketplace",
+    desc: "Browse thousands of fresh produce listings with real-time availability, verified quality, and direct farmer contacts.",
+    color: "bg-green-50", iconColor: "text-green-600",
+  },
+  {
+    icon: Zap, title: "Flash Sales",
+    desc: "Farmers post limited-time discounted offers. Buyers get notified instantly and can book at slashed prices.",
+    color: "bg-amber-50", iconColor: "text-amber-600",
+  },
+  {
+    icon: TrendingUp, title: "Smart Matching",
+    desc: "AI-powered requirement matching connects buyer needs with the best available farmer crop listings automatically.",
+    color: "bg-blue-50", iconColor: "text-blue-600",
+  },
+  {
+    icon: MessageCircle, title: "Real-time Chat",
+    desc: "Negotiate directly with farmers or buyers via secure in-app messaging. No phone numbers needed.",
+    color: "bg-purple-50", iconColor: "text-purple-600",
+  },
+  {
+    icon: Shield, title: "Verified Profiles",
+    desc: "Admin-verified farmer and buyer accounts ensure trust and quality on every transaction.",
+    color: "bg-teal-50", iconColor: "text-teal-600",
+  },
+  {
+    icon: BarChart3, title: "Price Intelligence",
+    desc: "Access real-time pricing trends and demand data to make better buying and selling decisions.",
+    color: "bg-rose-50", iconColor: "text-rose-600",
+  },
+];
+
+const STEPS_FARMER = [
+  { n: "01", title: "Register & Verify", desc: "Create your farmer account and get verified by our team in 24 hours." },
+  { n: "02", title: "List Your Crops", desc: "Add your crop details, photos, pricing, and available quantity." },
+  { n: "03", title: "Get Orders", desc: "Receive purchase requests, accept them, and chat directly with buyers." },
+];
+
+const STEPS_BUYER = [
+  { n: "01", title: "Sign Up Free", desc: "Create your buyer account in under 2 minutes — no charges to browse." },
+  { n: "02", title: "Discover & Filter", desc: "Search the marketplace by crop, location, category, or price range." },
+  { n: "03", title: "Book & Receive", desc: "Book crops directly, pay farmers, and coordinate delivery seamlessly." },
+];
 
 export default function Landing() {
-  const { user, isAuthenticated, logout } = useAuth();
+  const { isAuthenticated, role } = useAuth();
   const navigate = useNavigate();
-  const [language, setLanguage] = useState("English");
-  
-  // State for the image carousel at the bottom
-  const [currentSlide, setCurrentSlide] = useState(0);
-  const carouselSlides = [
-    {
-      title: "Bridging Farmers and Markets",
-      subtitle: "Empowering Farmers. Enriching Futures.",
-      tagline: "A smarter way to connect, trade and grow together.",
-      image: "/carousel_banner.png"
-    },
-    {
-      title: "Direct Trading Platform",
-      subtitle: "Eliminating Middlemen Commissions",
-      tagline: "Farmers get the true price for their hard work directly from buyers.",
-      image: "/farmer_banner.png"
-    }
-  ];
 
-  // Auto-advance slide
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentSlide((prev) => (prev + 1) % carouselSlides.length);
-    }, 6005);
-    return () => clearInterval(timer);
-  }, [carouselSlides.length]);
+  const getDashboard = () => {
+    if (role === "farmer") return "/farmer/dashboard";
+    if (role === "admin") return "/admin";
+    return "/buyer/marketplace";
+  };
 
   return (
-    <div className="min-h-screen bg-[#fcfaf4] font-sans antialiased text-[#211c14]">
-      {/* ── HEADER NAVIGATION ────────────────────────────────────────── */}
-      <nav className="sticky top-0 z-50 border-b border-paddy-100 bg-[#fcfaf4]/90 backdrop-blur-md">
-        <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-          
-          {/* Logo Section */}
-          <Link to="/" className="flex items-center gap-3">
-            <div className="rounded-xl bg-paddy-800 p-2 text-white">
-              <Sprout size={24} />
+    <div className="min-h-screen bg-white">
+      {/* ── Navbar ──────────────────────────────────── */}
+      <nav className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-slate-200">
+        <div className="max-w-7xl mx-auto px-4 md:px-8 h-16 flex items-center justify-between">
+          <Link to="/" className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center shadow-md">
+              <Leaf size={18} className="text-white" />
             </div>
-            <div>
-              <h1 className="font-display text-xl font-bold tracking-tight text-paddy-900 leading-tight">
-                Raithu Sethu
-              </h1>
-              <p className="font-display text-[11px] font-medium text-paddy-700 leading-none">
-                రైతు సేతు
-              </p>
-            </div>
+            <span className="font-bold text-xl text-slate-800 tracking-tight">RaithuSethu</span>
           </Link>
-
-          {/* Navigation Links */}
-          <div className="hidden md:flex items-center gap-8">
-            <Link to="/" className="text-sm font-bold text-paddy-900 border-b-2 border-paddy-600 pb-1">
-              Home
-            </Link>
-            <Link to="/buyer/marketplace" className="text-sm font-semibold text-neutral-600 hover:text-paddy-900 transition-colors">
-              Marketplace
-            </Link>
-            <Link to="/farmer/dashboard" className="text-sm font-semibold text-neutral-600 hover:text-paddy-900 transition-colors">
-              Farmer
-            </Link>
-            <Link to="/farmer/crops" className="text-sm font-semibold text-neutral-600 hover:text-paddy-900 transition-colors">
-              Upload Crop
-            </Link>
+          <div className="hidden md:flex items-center gap-8 text-sm font-medium text-slate-600">
+            <Link to="/buyer/marketplace" className="hover:text-green-600 transition-colors">Marketplace</Link>
+            <a href="#features" className="hover:text-green-600 transition-colors">Features</a>
+            <a href="#how-it-works" className="hover:text-green-600 transition-colors">How it works</a>
           </div>
-
-          {/* Right Nav Icons (Authenticated vs Guest) */}
-          <div className="flex items-center gap-4 sm:gap-6">
-            
-            {/* Language Selector */}
-            <button
-              onClick={() => setLanguage(language === "English" ? "తెలుగు" : "English")}
-              className="inline-flex items-center gap-1.5 rounded-full border border-neutral-200 bg-white px-3.5 py-1.5 text-xs font-bold text-neutral-700 shadow-sm hover:bg-neutral-50"
-            >
-              <Globe size={14} className="text-neutral-500" />
-              <span>{language}</span>
-            </button>
-
+          <div className="flex items-center gap-3">
             {isAuthenticated ? (
-              <div className="flex items-center gap-4">
-                {/* Chat Icon */}
-                <Link
-                  to="/chat"
-                  className="rounded-full bg-white p-2 text-neutral-600 border border-neutral-200 shadow-sm hover:text-paddy-700 transition-colors relative"
-                >
-                  <MessageSquare size={18} />
-                  <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-paddy-600"></span>
-                </Link>
-
-                {/* Notification Icon */}
-                <Link
-                  to="/notifications"
-                  className="rounded-full bg-white p-2 text-neutral-600 border border-neutral-200 shadow-sm hover:text-paddy-700 transition-colors relative"
-                >
-                  <Bell size={18} />
-                  <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-orange-500"></span>
-                </Link>
-
-                {/* User Avatar */}
-                <div className="flex items-center gap-2">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-paddy-800 text-sm font-bold text-white shadow-md">
-                    {user?.name ? user.name[0].toUpperCase() : "U"}
-                  </div>
-                  <span className="hidden sm:block text-xs font-semibold text-neutral-700">
-                    {user?.name || "User"}
-                  </span>
-                </div>
-
-                {/* Logout Button */}
-                <button
-                  onClick={logout}
-                  className="rounded-full bg-white p-2 text-neutral-500 border border-neutral-200 shadow-sm hover:text-red-600 transition-colors"
-                  title="Logout"
-                >
-                  <LogOut size={18} />
-                </button>
-              </div>
+              <button onClick={() => navigate(getDashboard())} className="btn btn-primary btn-sm">
+                Go to Dashboard <ArrowRight size={14} />
+              </button>
             ) : (
-              <div className="flex items-center gap-3">
-                <Link
-                  to="/login"
-                  className="text-xs font-bold text-neutral-700 hover:text-paddy-800 px-3 py-1.5"
-                >
-                  Login
-                </Link>
-                <Link
-                  to="/register"
-                  className="rounded-xl bg-paddy-800 px-4 py-2 text-xs font-bold text-white shadow-md hover:bg-paddy-700 transition-all active:scale-95"
-                >
-                  Get Started
-                </Link>
-              </div>
+              <>
+                <Link to="/login" className="btn btn-secondary btn-sm hidden sm:inline-flex">Sign in</Link>
+                <Link to="/register" className="btn btn-primary btn-sm">Get Started</Link>
+              </>
             )}
-
           </div>
-
         </div>
       </nav>
 
-      {/* ── HERO SECTION ────────────────────────────────────────────── */}
-      <section className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
-        <div className="grid gap-12 lg:grid-cols-12 items-center">
-          
-          {/* Left Column: Heading and description */}
-          <div className="space-y-8 lg:col-span-7">
-            
-            {/* Tagline Pill */}
-            <div className="inline-flex items-center gap-2 rounded-full bg-paddy-50 border border-paddy-100 px-4 py-1.5">
-              <Star size={14} className="text-paddy-700 fill-paddy-600" />
-              <span className="text-xs font-bold tracking-wide uppercase text-paddy-800">
-                Direct Farm-to-Buyer Marketplace
-              </span>
-            </div>
+      {/* ── Hero Section ─────────────────────────────── */}
+      <section className="relative overflow-hidden"
+        style={{ background: "linear-gradient(150deg, #0f172a 0%, #1a3a2a 35%, #14532d 65%, #0f172a 100%)" }}>
+        {/* Grid pattern */}
+        <div className="absolute inset-0 opacity-8"
+          style={{ backgroundImage: "linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px)", backgroundSize: "60px 60px" }} />
+        {/* Glow orbs */}
+        <div className="absolute top-20 left-1/4 w-96 h-96 bg-green-500/15 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute bottom-20 right-1/4 w-80 h-80 bg-teal-400/10 rounded-full blur-3xl pointer-events-none" />
 
-            {/* Welcome Heading */}
-            <div className="space-y-4">
-              <h1 className="font-display text-4xl font-extrabold tracking-tight text-paddy-900 sm:text-5xl md:text-6xl leading-tight">
-                Welcome to <br />
-                <span className="text-paddy-700">Raithu Sethu</span>
+        <div className="relative max-w-7xl mx-auto px-4 md:px-8 pt-20 pb-24">
+          <div className="grid lg:grid-cols-2 gap-12 items-center">
+            {/* Left */}
+            <div className="animate-fade-in">
+              <div className="inline-flex items-center gap-2 bg-green-500/10 border border-green-500/20 rounded-full px-4 py-1.5 mb-6">
+                <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
+                <span className="text-green-400 text-sm font-semibold">Live marketplace • 12,000+ farmers</span>
+              </div>
+              <h1 className="text-5xl md:text-6xl font-bold text-white leading-tight mb-6">
+                Reduce Food Waste.<br />
+                <span className="gradient-text">Increase Farmer Profit.</span>
               </h1>
-              <p className="max-w-xl text-lg text-neutral-600 leading-relaxed">
-                Eliminate middlemen commission, reduce food wastage, and maximize profits. 
-                Connecting Telangana & Andhra farmers directly with food chains, wholesalers, and retail buyers.
+              <p className="text-slate-400 text-lg leading-relaxed mb-8 max-w-lg">
+                Connect farmers directly with buyers through our real-time crop listings, smart matching, flash sales, and direct chat. No middlemen, fair prices.
               </p>
-            </div>
-
-            {/* Call to Actions */}
-            <div className="flex flex-wrap gap-4">
-              <Link
-                to="/buyer/marketplace"
-                className="inline-flex items-center gap-2 rounded-xl bg-paddy-800 px-6 py-4 text-sm font-bold text-white shadow-lg shadow-paddy-800/10 hover:bg-paddy-700 transition-all hover:translate-x-0.5 active:translate-x-0 active:scale-[0.98]"
-              >
-                Explore Marketplace <ArrowRight size={16} />
-              </Link>
-              <Link
-                to={isAuthenticated ? "/farmer/crops" : "/login?role=farmer"}
-                className="inline-flex items-center justify-center rounded-xl border-2 border-neutral-300 bg-white px-6 py-4 text-sm font-bold text-neutral-700 hover:border-paddy-800 hover:text-paddy-800 transition-colors"
-              >
-                Upload Crop
-              </Link>
-            </div>
-
-          </div>
-
-          {/* Right Column: Agri Mandi Volume Listing */}
-          <div className="lg:col-span-5">
-            <div className="relative rounded-3xl bg-white p-6 shadow-xl border border-neutral-200/50">
-              
-              {/* Card top flags */}
-              <div className="absolute top-[-14px] right-6 rounded-full bg-orange-500 px-3.5 py-1 text-[10px] font-extrabold uppercase tracking-wider text-white shadow-md flex items-center gap-1">
-                <Zap size={11} className="fill-white" /> Live Prices
+              <div className="flex flex-wrap gap-4">
+                <Link to="/register" className="btn btn-primary btn-xl">
+                  Get Started Free <ArrowRight size={18} />
+                </Link>
+                <Link to="/buyer/marketplace" className="btn btn-lg bg-white/10 text-white border border-white/20 hover:bg-white/15">
+                  Browse Marketplace
+                </Link>
               </div>
-
-              {/* Title Header */}
-              <div className="flex items-center gap-2 text-xs font-extrabold uppercase tracking-wider text-paddy-800 mb-6">
-                <div className="h-2 w-2 rounded-full bg-paddy-600 animate-ping"></div>
-                Active Agri Mandi Volume
-              </div>
-
-              {/* Listings Stack */}
-              <div className="space-y-4">
-                
-                {/* Crop Item 1 */}
-                <div className="flex items-center justify-between rounded-2xl border border-neutral-100 p-4 transition-all hover:bg-neutral-50 hover:border-paddy-100">
-                  <div className="flex items-center gap-3.5">
-                    <div className="rounded-xl bg-paddy-50 p-2.5 text-paddy-800">
-                      <Sprout size={20} />
+              <div className="flex items-center gap-4 mt-8 pt-8 border-t border-white/10">
+                <div className="flex -space-x-2">
+                  {["R","P","S","K","M"].map((l, i) => (
+                    <div key={i} className="w-8 h-8 rounded-full bg-gradient-to-br from-green-400 to-teal-600 flex items-center justify-center text-white text-xs font-bold border-2 border-slate-900">
+                      {l}
                     </div>
-                    <div>
-                      <h4 className="text-sm font-bold text-neutral-800">Sona Masuri Paddy</h4>
-                      <p className="text-[11px] text-neutral-400">Siddipet Rural • 120 Qtl</p>
-                    </div>
+                  ))}
+                </div>
+                <div>
+                  <div className="flex gap-0.5">
+                    {[1,2,3,4,5].map(s => <Star key={s} size={12} className="text-amber-400 fill-amber-400" />)}
                   </div>
-                  <div className="text-right">
-                    <div className="text-sm font-extrabold text-neutral-800">₹2,150 / Qtl</div>
-                    <span className="inline-block text-[9px] font-extrabold tracking-wider uppercase text-orange-600 bg-orange-50 px-2 py-0.5 rounded-full mt-1">
-                      Flash Sale
-                    </span>
+                  <p className="text-slate-400 text-xs mt-0.5">Trusted by 20,000+ users</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Right — Dashboard preview card */}
+            <div className="relative animate-fade-in delay-200">
+              <div className="landing-hero-card p-6 rounded-2xl">
+                <div className="flex items-center justify-between mb-5">
+                  <div>
+                    <p className="text-slate-400 text-xs">Good Morning,</p>
+                    <p className="text-white font-bold text-lg">Ramesh Kumar 👋</p>
+                  </div>
+                  <div className="bg-green-500/20 text-green-400 px-3 py-1 rounded-full text-xs font-semibold">Verified Farmer</div>
+                </div>
+                <div className="grid grid-cols-2 gap-3 mb-5">
+                  {[["Active Crops","24","↑7%"], ["Pending Requests","18","↑4.8%"], ["Revenue (₹)","45,230","↑19%"], ["Bookings","41","↑3%"]].map(([l,v,t]) => (
+                    <div key={l} className="bg-white/5 rounded-xl p-3">
+                      <p className="text-slate-400 text-xs mb-1">{l}</p>
+                      <p className="text-white font-bold text-xl">{v}</p>
+                      <p className="text-green-400 text-xs">{t} this week</p>
+                    </div>
+                  ))}
+                </div>
+                <div className="bg-white/5 rounded-xl p-3">
+                  <p className="text-slate-400 text-xs mb-3">Recent Listings</p>
+                  {[["Tomatoes","500kg","₹25/kg","Active"],["Onions","300kg","₹18/kg","Flash Sale"]].map(([n,q,p,s]) => (
+                    <div key={n} className="flex items-center justify-between py-1.5 border-b border-white/5 last:border-0">
+                      <div>
+                        <p className="text-white text-sm font-semibold">{n}</p>
+                        <p className="text-slate-500 text-xs">{q} • {p}</p>
+                      </div>
+                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${s === "Flash Sale" ? "badge-flash" : "badge-active"}`}>{s}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              {/* Floating elements */}
+              <div className="absolute -top-4 -right-4 glass-dark rounded-xl p-3 animate-float">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 bg-amber-500 rounded-lg flex items-center justify-center">
+                    <Zap size={13} className="text-white" />
+                  </div>
+                  <div>
+                    <p className="text-white text-xs font-bold">Flash Sale</p>
+                    <p className="text-amber-400 text-xs">30% off • 2h left</p>
                   </div>
                 </div>
-
-                {/* Crop Item 2 */}
-                <div className="flex items-center justify-between rounded-2xl border border-neutral-100 p-4 transition-all hover:bg-neutral-50 hover:border-paddy-100">
-                  <div className="flex items-center gap-3.5">
-                    <div className="rounded-xl bg-orange-50 p-2.5 text-orange-600">
-                      <Zap size={20} />
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-bold text-neutral-800">Guntur Red Chilli</h4>
-                      <p className="text-[11px] text-neutral-400">Guntur Market • 45 Bags</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-sm font-extrabold text-neutral-800">₹18,500 / Bag</div>
-                    <span className="inline-block text-[9px] font-extrabold tracking-wider uppercase text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full mt-1">
-                      High Demand
-                    </span>
-                  </div>
+              </div>
+              <div className="absolute -bottom-4 -left-4 glass-dark rounded-xl p-3 animate-float" style={{ animationDelay: "1s" }}>
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 size={16} className="text-green-400" />
+                  <p className="text-white text-xs font-medium">New order received!</p>
                 </div>
-
-                {/* Crop Item 3 */}
-                <div className="flex items-center justify-between rounded-2xl border border-neutral-100 p-4 transition-all hover:bg-neutral-50 hover:border-paddy-100">
-                  <div className="flex items-center gap-3.5">
-                    <div className="rounded-xl bg-gold-50 p-2.5 text-gold-600">
-                      <Coins size={20} />
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-bold text-neutral-800">Kasturi Turmeric</h4>
-                      <p className="text-[11px] text-neutral-400">Nizamabad • 15 Qtl</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-sm font-extrabold text-neutral-800">₹7,800 / Qtl</div>
-                    <span className="inline-block text-[9px] font-extrabold tracking-wider uppercase text-neutral-500 bg-neutral-100 px-2 py-0.5 rounded-full mt-1">
-                      Reserved
-                    </span>
-                  </div>
-                </div>
-
               </div>
-
             </div>
-          </div>
-
-        </div>
-      </section>
-
-      {/* ── STATISTICS BAR ──────────────────────────────────────────── */}
-      <section className="border-y border-paddy-100/50 bg-paddy-50/40 py-10 shadow-inner">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-2 gap-y-8 gap-x-4 md:grid-cols-4 text-center">
-            
-            <div>
-              <div className="flex justify-center text-paddy-850 mb-1">
-                <Coins className="text-paddy-700 h-6 w-6 stroke-[1.5]" />
-              </div>
-              <div className="text-2xl font-black text-paddy-900 tracking-tight sm:text-3xl">₹1.4 Cr+</div>
-              <div className="mt-1 text-xs font-bold uppercase tracking-wider text-neutral-500">Farmer Revenue Facilitated</div>
-            </div>
-
-            <div>
-              <div className="flex justify-center text-paddy-850 mb-1">
-                <Timer className="text-paddy-700 h-6 w-6 stroke-[1.5]" />
-              </div>
-              <div className="text-2xl font-black text-paddy-900 tracking-tight sm:text-3xl">12 Hours</div>
-              <div className="mt-1 text-xs font-bold uppercase tracking-wider text-neutral-500">Avg. Crop Booking Time</div>
-            </div>
-
-            <div>
-              <div className="flex justify-center text-paddy-850 mb-1">
-                <CheckCircle className="text-paddy-700 h-6 w-6 stroke-[1.5]" />
-              </div>
-              <div className="text-2xl font-black text-paddy-900 tracking-tight sm:text-3xl">98%</div>
-              <div className="mt-1 text-xs font-bold uppercase tracking-wider text-neutral-500">Successful Weighments</div>
-            </div>
-
-            <div>
-              <div className="flex justify-center text-paddy-850 mb-1">
-                <Shield className="text-paddy-700 h-6 w-6 stroke-[1.5]" />
-              </div>
-              <div className="text-2xl font-black text-paddy-900 tracking-tight sm:text-3xl">0%</div>
-              <div className="mt-1 text-xs font-bold uppercase tracking-wider text-neutral-500">Middlemen Commissions</div>
-            </div>
-
           </div>
         </div>
       </section>
 
-      {/* ── INTERACTIVE FEATURE CAROUSEL (Image 3) ─────────────────────── */}
-      <section className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
-        
-        {/* Mandi spotlight / title header */}
-        <div className="flex items-end justify-between border-b border-neutral-200 pb-5 mb-10">
-          <div>
-            <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-paddy-700 mb-1">
-              <ShoppingBag size={14} /> Mandi Spotlight
-            </div>
-            <h2 className="font-display text-3xl font-extrabold text-neutral-900">
-              Featured Crops on Sale
-            </h2>
-          </div>
-          <Link
-            to="/buyer/marketplace"
-            className="group inline-flex items-center gap-1 text-sm font-bold text-paddy-800 hover:text-paddy-700"
-          >
-            View All Listings <ArrowRight size={15} className="transition-transform group-hover:translate-x-1" />
-          </Link>
-        </div>
-
-        {/* Carousel Graphic Window */}
-        <div className="relative h-[450px] sm:h-[500px] w-full overflow-hidden rounded-3xl bg-neutral-900 shadow-2xl">
-          
-          {/* Background Images */}
-          {carouselSlides.map((slide, index) => (
-            <div
-              key={index}
-              className={`absolute inset-0 h-full w-full transition-opacity duration-1000 ${
-                index === currentSlide ? "opacity-75" : "opacity-0 pointer-events-none"
-              }`}
-            >
-              <img
-                src={slide.image}
-                alt={slide.title}
-                className="h-full w-full object-cover"
-              />
-            </div>
-          ))}
-
-          {/* Golden/Dark overlay gradient */}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent"></div>
-
-          {/* Languages Dropdown Overlay */}
-          <div className="absolute top-6 right-6 z-20">
-            <div className="rounded-full bg-white/10 backdrop-blur-md border border-white/20 px-3.5 py-1.5 text-xs font-bold text-white flex items-center gap-1.5">
-              <span>తెలుగు</span>
-              <Globe size={13} />
-            </div>
-          </div>
-
-          {/* Carousel Slide Texts (Logo, headings) */}
-          <div className="absolute inset-x-0 top-12 flex flex-col items-center text-center px-4">
-            <div className="flex items-center gap-2 mb-3 bg-black/20 backdrop-blur-sm px-4 py-1.5 rounded-full border border-white/10">
-              <Sprout size={18} className="text-paddy-300" />
-              <span className="font-display text-base font-bold text-white tracking-wide">Raithu Sethu</span>
-              <span className="font-display text-xs font-semibold text-paddy-200">రైతు సేతు</span>
-            </div>
-            <p className="text-xs font-bold uppercase tracking-widest text-gold-300">{carouselSlides[currentSlide].subtitle}</p>
-            <h3 className="mt-2 text-2xl sm:text-4xl font-black text-white max-w-xl font-display">
-              {carouselSlides[currentSlide].title}
-            </h3>
-            <p className="mt-2 text-xs sm:text-sm text-neutral-200 max-w-md">
-              {carouselSlides[currentSlide].tagline}
-            </p>
-          </div>
-
-          {/* Floating White Features Card at bottom */}
-          <div className="absolute inset-x-6 bottom-12 flex justify-center z-10">
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-4 w-full max-w-4xl bg-white/95 backdrop-blur-md rounded-2xl p-4 shadow-xl border border-neutral-100 text-center">
-              
-              <div className="flex flex-col items-center p-2 rounded-xl hover:bg-neutral-50 transition-colors">
-                <div className="rounded-full bg-paddy-50 p-2 text-paddy-700 mb-2">
-                  <Sprout size={16} />
+      {/* ── Stats Bar ─────────────────────────────────── */}
+      <section className="py-12 bg-white border-b border-slate-100">
+        <div className="max-w-7xl mx-auto px-4 md:px-8">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 md:gap-8">
+            {STATS.map(({ label, value, icon: Icon, color, bg }, i) => (
+              <div key={label} className="flex items-center gap-4 animate-fade-in" style={{ animationDelay: `${i * 100}ms` }}>
+                <div className={`w-12 h-12 rounded-2xl ${bg} flex items-center justify-center flex-shrink-0`}>
+                  <Icon size={22} className={color} />
                 </div>
-                <span className="text-[11px] font-black text-neutral-800 leading-tight">Reduce Food Waste</span>
-              </div>
-
-              <div className="flex flex-col items-center p-2 rounded-xl hover:bg-neutral-50 transition-colors">
-                <div className="rounded-full bg-gold-50 p-2 text-gold-700 mb-2">
-                  <Coins size={16} />
+                <div>
+                  <p className="text-2xl font-bold text-slate-900">{value}</p>
+                  <p className="text-sm text-slate-500">{label}</p>
                 </div>
-                <span className="text-[11px] font-black text-neutral-800 leading-tight">Increase Farmer Income</span>
               </div>
-
-              <div className="flex flex-col items-center p-2 rounded-xl hover:bg-neutral-50 transition-colors">
-                <div className="rounded-full bg-paddy-50 p-2 text-paddy-700 mb-2">
-                  <Users size={16} />
-                </div>
-                <span className="text-[11px] font-black text-neutral-800 leading-tight">Connect Directly</span>
-              </div>
-
-              <div className="flex flex-col items-center p-2 rounded-xl hover:bg-neutral-50 transition-colors">
-                <div className="rounded-full bg-emerald-50 p-2 text-emerald-700 mb-2">
-                  <Shield size={16} />
-                </div>
-                <span className="text-[11px] font-black text-neutral-800 leading-tight">Secure Future</span>
-              </div>
-
-            </div>
-          </div>
-
-          {/* Dots Indicator */}
-          <div className="absolute bottom-4 inset-x-0 flex justify-center gap-1.5 z-20">
-            {carouselSlides.map((_, i) => (
-              <button
-                key={i}
-                onClick={() => setCurrentSlide(i)}
-                className={`h-2 rounded-full transition-all duration-300 ${
-                  i === currentSlide ? "bg-white w-6" : "bg-white/40 w-2"
-                }`}
-              />
             ))}
           </div>
-
-          {/* Arrow navigation triggers */}
-          <button
-            onClick={() => setCurrentSlide((prev) => (prev - 1 + carouselSlides.length) % carouselSlides.length)}
-            className="absolute left-4 top-1/2 -translate-y-1/2 flex h-10 w-10 items-center justify-center rounded-full bg-black/10 text-white backdrop-blur-sm border border-white/10 hover:bg-black/30 transition-all"
-          >
-            <ChevronLeft size={20} />
-          </button>
-          <button
-            onClick={() => setCurrentSlide((prev) => (prev + 1) % carouselSlides.length)}
-            className="absolute right-4 top-1/2 -translate-y-1/2 flex h-10 w-10 items-center justify-center rounded-full bg-black/10 text-white backdrop-blur-sm border border-white/10 hover:bg-black/30 transition-all"
-          >
-            <ChevronRight size={20} />
-          </button>
-
         </div>
-
       </section>
 
-      {/* ── FOOTER ────────────────────────────────────────────────── */}
-      <footer className="border-t border-paddy-100 bg-[#fcfaf4] py-12 text-center">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 space-y-4">
-          <div className="flex justify-center items-center gap-2">
-            <Sprout size={18} className="text-paddy-700" />
-            <span className="font-display font-bold text-paddy-900">Raithu Sethu</span>
+      {/* ── Features ──────────────────────────────────── */}
+      <section id="features" className="py-20 bg-slate-50">
+        <div className="max-w-7xl mx-auto px-4 md:px-8">
+          <div className="text-center mb-14 animate-fade-in">
+            <div className="inline-flex items-center gap-2 bg-green-100 text-green-700 text-sm font-semibold px-4 py-1.5 rounded-full mb-4">
+              <CheckCircle2 size={14} /> Why RaithuSethu
+            </div>
+            <h2 className="text-4xl font-bold text-slate-900 mb-4">Everything you need to trade smarter</h2>
+            <p className="text-slate-500 text-lg max-w-2xl mx-auto">Built for Indian agriculture — features designed to maximize profit, reduce waste, and build direct trust.</p>
           </div>
-          <p className="text-xs text-neutral-500">
-            &copy; {new Date().getFullYear()} Raithu Sethu — Bridging Farmers & Buyers. All rights reserved.
-          </p>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {FEATURES.map(({ icon: Icon, title, desc, color, iconColor }, i) => (
+              <div key={title} className="card p-6 card-interactive animate-fade-in" style={{ animationDelay: `${i * 80}ms` }}>
+                <div className={`w-12 h-12 ${color} rounded-2xl flex items-center justify-center mb-4`}>
+                  <Icon size={22} className={iconColor} />
+                </div>
+                <h3 className="font-bold text-slate-900 text-lg mb-2">{title}</h3>
+                <p className="text-slate-500 text-sm leading-relaxed">{desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── How it works ──────────────────────────────── */}
+      <section id="how-it-works" className="py-20 bg-white">
+        <div className="max-w-7xl mx-auto px-4 md:px-8">
+          <div className="text-center mb-14">
+            <h2 className="text-4xl font-bold text-slate-900 mb-4">How it works</h2>
+            <p className="text-slate-500 text-lg">Simple steps to get started — whether you're a farmer or a buyer.</p>
+          </div>
+          <div className="grid lg:grid-cols-2 gap-12">
+            {/* Farmer */}
+            <div className="space-y-6">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-10 h-10 rounded-xl bg-green-500 flex items-center justify-center">
+                  <Sprout size={18} className="text-white" />
+                </div>
+                <h3 className="text-xl font-bold text-slate-900">For Farmers</h3>
+              </div>
+              {STEPS_FARMER.map(({ n, title, desc }, i) => (
+                <div key={n} className="flex gap-4 animate-slide-in-left" style={{ animationDelay: `${i * 100}ms` }}>
+                  <div className="w-10 h-10 rounded-xl bg-green-50 flex items-center justify-center text-green-600 font-bold text-sm flex-shrink-0">{n}</div>
+                  <div>
+                    <h4 className="font-bold text-slate-800 mb-1">{title}</h4>
+                    <p className="text-slate-500 text-sm leading-relaxed">{desc}</p>
+                  </div>
+                </div>
+              ))}
+              <Link to="/register" className="btn btn-primary mt-2">
+                Register as Farmer <ArrowRight size={16} />
+              </Link>
+            </div>
+            {/* Buyer */}
+            <div className="space-y-6">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-10 h-10 rounded-xl bg-blue-500 flex items-center justify-center">
+                  <ShoppingBag size={18} className="text-white" />
+                </div>
+                <h3 className="text-xl font-bold text-slate-900">For Buyers</h3>
+              </div>
+              {STEPS_BUYER.map(({ n, title, desc }, i) => (
+                <div key={n} className="flex gap-4 animate-slide-in-right" style={{ animationDelay: `${i * 100}ms` }}>
+                  <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600 font-bold text-sm flex-shrink-0">{n}</div>
+                  <div>
+                    <h4 className="font-bold text-slate-800 mb-1">{title}</h4>
+                    <p className="text-slate-500 text-sm leading-relaxed">{desc}</p>
+                  </div>
+                </div>
+              ))}
+              <Link to="/buyer/marketplace" className="btn bg-blue-600 text-white hover:bg-blue-700 mt-2 inline-flex items-center gap-2">
+                Browse Marketplace <ArrowRight size={16} />
+              </Link>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── CTA ───────────────────────────────────────── */}
+      <section className="py-20 relative overflow-hidden"
+        style={{ background: "linear-gradient(135deg, #0f172a 0%, #14532d 50%, #0f172a 100%)" }}>
+        <div className="absolute inset-0 opacity-10"
+          style={{ backgroundImage: "radial-gradient(circle at 25px 25px, rgba(255,255,255,0.2) 2px, transparent 0)", backgroundSize: "50px 50px" }} />
+        <div className="relative max-w-3xl mx-auto px-4 text-center animate-fade-in">
+          <h2 className="text-4xl font-bold text-white mb-4">Ready to transform your agricultural business?</h2>
+          <p className="text-slate-400 text-lg mb-8">Join thousands of farmers and buyers already trading smarter on RaithuSethu.</p>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <Link to="/register" className="btn btn-primary btn-xl">
+              Start for Free <ArrowRight size={18} />
+            </Link>
+            <Link to="/buyer/marketplace" className="btn btn-xl bg-white/10 text-white border border-white/20 hover:bg-white/15">
+              Browse Crops
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Footer ────────────────────────────────────── */}
+      <footer className="bg-slate-900 py-10">
+        <div className="max-w-7xl mx-auto px-4 md:px-8 flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center">
+              <Leaf size={14} className="text-white" />
+            </div>
+            <span className="text-white font-bold">RaithuSethu</span>
+          </div>
+          <p className="text-slate-500 text-sm">© 2026 RaithuSethu. Reducing food waste, increasing farmer prosperity.</p>
+          <div className="flex items-center gap-4 text-sm text-slate-500">
+            <Link to="/login" className="hover:text-white transition-colors">Sign in</Link>
+            <Link to="/register" className="hover:text-white transition-colors">Register</Link>
+            <Link to="/buyer/marketplace" className="hover:text-white transition-colors">Marketplace</Link>
+          </div>
         </div>
       </footer>
     </div>
   );
 }
-

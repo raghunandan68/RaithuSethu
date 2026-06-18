@@ -1,159 +1,179 @@
-import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { CheckCircle2, XCircle, MessageCircle, User, Package, Clock, Filter } from "lucide-react";
 import { farmerApi } from "../../api/farmer";
 import { chatApi } from "../../api/resources";
 import { useToast } from "../../context/ToastContext";
-import { extractErrorMessage, formatCurrency, formatDateTime } from "../../utils/format";
-import Button from "../../components/common/Button";
-import { PageLoader, EmptyState, Badge } from "../../components/common/Feedback";
-import { ShoppingBag, Check, X, MessageCircle } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { StatusBadge } from "../../components/ui/Badge";
+import { SkeletonTable } from "../../components/ui/Skeleton";
+import EmptyState from "../../components/ui/EmptyState";
+import { format, parseISO } from "date-fns";
 
 export default function PurchaseRequests() {
+  const [requests, setRequests] = useState([]);
+  const [filtered, setFiltered] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState({});
+  const [filter, setFilter] = useState("all");
   const toast = useToast();
   const navigate = useNavigate();
-  const [requests, setRequests] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [actionLoading, setActionLoading] = useState(null);
-  const [chatLoading, setChatLoading] = useState(null);
 
-  const fetch = async () => {
+  const load = async () => {
+    setLoading(true);
     try {
       const res = await farmerApi.getPurchaseRequests();
       setRequests(res.data || []);
-    } catch {
-      toast.error("Failed to load requests.");
-    } finally {
-      setLoading(false);
-    }
+    } catch { toast.error("Failed to load requests"); }
+    finally { setLoading(false); }
   };
 
-  useEffect(() => { fetch(); }, []);
+  useEffect(() => { load(); }, []);
+
+  useEffect(() => {
+    setFiltered(filter === "all" ? requests : requests.filter(r => r.status === filter));
+  }, [requests, filter]);
 
   const handleAccept = async (id) => {
-    setActionLoading(id);
+    setActionLoading(a => ({ ...a, [id]: "accept" }));
     try {
       await farmerApi.acceptRequest(id);
       toast.success("Request accepted!");
-      fetch();
-    } catch (err) {
-      toast.error(extractErrorMessage(err));
-    } finally {
-      setActionLoading(null);
-    }
+      load();
+    } catch (err) { toast.error(err?.response?.data?.detail || "Failed to accept"); }
+    finally { setActionLoading(a => ({ ...a, [id]: null })); }
   };
 
   const handleReject = async (id) => {
-    setActionLoading(id);
+    setActionLoading(a => ({ ...a, [id]: "reject" }));
     try {
       await farmerApi.rejectRequest(id);
-      toast.success("Request rejected.");
-      fetch();
-    } catch (err) {
-      toast.error(extractErrorMessage(err));
-    } finally {
-      setActionLoading(null);
-    }
+      toast.success("Request rejected");
+      load();
+    } catch (err) { toast.error(err?.response?.data?.detail || "Failed to reject"); }
+    finally { setActionLoading(a => ({ ...a, [id]: null })); }
   };
 
-  const handleChat = async (req) => {
-    setChatLoading(req.id);
+  const handleChat = async (buyerId) => {
     try {
-      const res = await chatApi.createConversation(req.buyer_id);
-      navigate("/chat", { state: { conversation: res.data } });
-    } catch (err) {
-      toast.error(extractErrorMessage(err) || "Failed to start chat");
-    } finally {
-      setChatLoading(null);
-    }
+      const res = await chatApi.createConversation(buyerId);
+      navigate("/chat", { state: { conversationId: res.data?.id } });
+    } catch { toast.error("Could not start chat"); }
   };
 
-  if (loading) return <PageLoader />;
+  const tabs = [
+    { key: "all", label: "All", count: requests.length },
+    { key: "pending", label: "Pending", count: requests.filter(r=>r.status==="pending").length },
+    { key: "accepted", label: "Accepted", count: requests.filter(r=>r.status==="accepted").length },
+    { key: "rejected", label: "Rejected", count: requests.filter(r=>r.status==="rejected").length },
+  ];
 
   return (
-    <div>
-      <div className="mb-6">
-        <h1 className="font-display text-2xl font-semibold text-ink">Purchase Requests</h1>
-        <p className="mt-1 text-sm text-ink-soft">Review and respond to buyer requests for your crops</p>
+    <div className="page-enter space-y-6">
+      <div className="page-header">
+        <h1 className="page-title">Purchase Requests</h1>
+        <p className="page-subtitle">Review and respond to buyer purchase requests for your crops</p>
       </div>
 
-      {requests.length === 0 ? (
-        <EmptyState
-          icon={<ShoppingBag size={40} />}
-          title="No requests yet"
-          description="Buyers will send requests when they're interested in your crops."
-        />
-      ) : (
-        <div className="space-y-3">
-          {requests.map((req) => (
-            <div key={req.id} className="rounded-xl border border-paddy-100 bg-white p-5 shadow-sm">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-semibold text-ink">{req.crop_name}</h3>
-                    <Badge tone={req.status === "pending" ? "gold" : req.status === "accepted" ? "paddy" : "terracotta"}>
-                      {req.status}
-                    </Badge>
-                  </div>
-                  <div className="mt-2 space-y-1">
-                    <p className="text-sm text-ink-soft">
-                      Quantity: <span className="font-semibold text-ink">{req.quantity} kg</span>
-                    </p>
-                    {req.proposed_price && (
-                      <p className="text-sm text-ink-soft">
-                        Proposed Price: <span className="font-semibold text-ink">{formatCurrency(req.proposed_price)}</span>
-                      </p>
-                    )}
-                    {req.message && (
-                      <p className="mt-2 rounded-lg bg-paddy-50 px-3 py-2 text-sm text-ink-soft italic">
-                        &ldquo;{req.message}&rdquo;
-                      </p>
-                    )}
-                    <p className="text-xs text-ink-soft/60">{formatDateTime(req.created_at)}</p>
-                  </div>
-                </div>
-                {req.status === "pending" && (
-                  <div className="flex shrink-0 gap-2">
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      onClick={() => handleAccept(req.id)}
-                      loading={actionLoading === req.id}
-                    >
-                      <Check size={14} /> Accept
-                    </Button>
-                    <Button
-                      variant="danger"
-                      size="sm"
-                      onClick={() => handleReject(req.id)}
-                      disabled={actionLoading === req.id}
-                    >
-                      <X size={14} /> Reject
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => handleChat(req)}
-                      loading={chatLoading === req.id}
-                    >
-                      <MessageCircle size={14} /> Chat
-                    </Button>
-                  </div>
-                )}
-                {(req.status === "accepted" || req.status === "completed") && (
-                  <div className="flex shrink-0 gap-2">
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => handleChat(req)}
-                      loading={chatLoading === req.id}
-                    >
-                      <MessageCircle size={14} /> Chat
-                    </Button>
-                  </div>
-                )}
-              </div>
-            </div>
+      {/* Summary cards */}
+      {!loading && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          {tabs.map(({ key, label, count }) => (
+            <button key={key} onClick={() => setFilter(key)}
+              className={`p-4 rounded-xl border-2 text-left transition-all ${filter === key ? "border-green-500 bg-green-50" : "border-slate-200 bg-white hover:border-slate-300"}`}>
+              <p className={`text-2xl font-bold ${filter === key ? "text-green-700" : "text-slate-800"}`}>{count}</p>
+              <p className={`text-sm mt-0.5 ${filter === key ? "text-green-600" : "text-slate-500"}`}>{label}</p>
+            </button>
           ))}
+        </div>
+      )}
+
+      {/* Table */}
+      {loading ? (
+        <SkeletonTable rows={5} />
+      ) : filtered.length === 0 ? (
+        <div className="card">
+          <EmptyState
+            type="requests"
+            title={filter !== "all" ? `No ${filter} requests` : "No purchase requests yet"}
+            description={filter !== "all" ? `Switch to 'All' to see all requests` : "When buyers request your crops, they'll appear here."}
+          />
+        </div>
+      ) : (
+        <div className="table-wrapper">
+          <table className="w-full text-sm">
+            <thead className="table-header">
+              <tr className="text-xs text-slate-500 uppercase tracking-wider">
+                <th className="text-left px-5 py-3 font-semibold">Buyer</th>
+                <th className="text-left px-4 py-3 font-semibold">Crop</th>
+                <th className="text-left px-4 py-3 font-semibold">Quantity</th>
+                <th className="text-left px-4 py-3 font-semibold">Proposed Price</th>
+                <th className="text-left px-4 py-3 font-semibold">Message</th>
+                <th className="text-left px-4 py-3 font-semibold">Date</th>
+                <th className="text-left px-4 py-3 font-semibold">Status</th>
+                <th className="text-left px-4 py-3 font-semibold">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {filtered.map((req, i) => (
+                <tr key={req.id} className="table-row animate-fade-in" style={{ animationDelay: `${i * 40}ms` }}>
+                  <td className="px-5 py-4">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
+                        <User size={14} className="text-blue-600" />
+                      </div>
+                      <div>
+                        <p className="font-semibold text-slate-800">{req["users!buyer_id"]?.name || req.buyer_name || "Buyer"}</p>
+                        <p className="text-xs text-slate-400">{req["users!buyer_id"]?.phone || ""}</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-4 py-4">
+                    <p className="font-medium text-slate-800">{req.crop_name || req.crops?.name || "—"}</p>
+                  </td>
+                  <td className="px-4 py-4 text-slate-700">{req.quantity} units</td>
+                  <td className="px-4 py-4 font-semibold text-slate-800">
+                    {req.proposed_price ? `₹${req.proposed_price}` : <span className="text-slate-400 font-normal text-xs">Not specified</span>}
+                  </td>
+                  <td className="px-4 py-4 max-w-48">
+                    <p className="text-slate-600 text-xs truncate" title={req.message}>{req.message || "—"}</p>
+                  </td>
+                  <td className="px-4 py-4 text-slate-500 text-xs">
+                    {req.created_at ? format(parseISO(req.created_at), "dd MMM yyyy") : "—"}
+                  </td>
+                  <td className="px-4 py-4"><StatusBadge status={req.status} /></td>
+                  <td className="px-4 py-4">
+                    <div className="flex gap-1.5">
+                      {req.status === "pending" && (
+                        <>
+                          <button
+                            onClick={() => handleAccept(req.id)}
+                            disabled={actionLoading[req.id]}
+                            className="btn btn-primary btn-sm"
+                          >
+                            {actionLoading[req.id] === "accept" ? "..." : <><CheckCircle2 size={12} /> Accept</>}
+                          </button>
+                          <button
+                            onClick={() => handleReject(req.id)}
+                            disabled={actionLoading[req.id]}
+                            className="btn btn-danger btn-sm"
+                          >
+                            {actionLoading[req.id] === "reject" ? "..." : <><XCircle size={12} /> Reject</>}
+                          </button>
+                        </>
+                      )}
+                      <button
+                        onClick={() => handleChat(req["users!buyer_id"]?.id || req.buyer_id)}
+                        className="btn btn-secondary btn-sm btn-icon"
+                        title="Chat with buyer"
+                      >
+                        <MessageCircle size={13} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </div>

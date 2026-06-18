@@ -1,174 +1,274 @@
-import { useState, useEffect } from "react";
-import { flashSalesApi } from "../../api/resources";
+import { useEffect, useState, useCallback } from "react";
+import { Zap, Plus, Edit2, Clock, Percent, AlertTriangle } from "lucide-react";
 import { farmerApi } from "../../api/farmer";
+import { flashSalesApi } from "../../api/resources";
 import { useToast } from "../../context/ToastContext";
-import { extractErrorMessage, formatCurrency, formatDateTime } from "../../utils/format";
-import Button from "../../components/common/Button";
-import { PageLoader, EmptyState, Badge } from "../../components/common/Feedback";
-import { Field, Input, Select } from "../../components/common/Field";
-import { TrendingUp, Plus, X } from "lucide-react";
+import Modal from "../../components/ui/Modal";
+import { SkeletonCard } from "../../components/ui/Skeleton";
+import EmptyState from "../../components/ui/EmptyState";
+import { format, parseISO, differenceInSeconds, isPast } from "date-fns";
 
-export default function FlashSales() {
-  const toast = useToast();
-  const [flashSales, setFlashSales] = useState([]);
-  const [crops, setCrops] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [form, setForm] = useState({
-    crop_id: "",
-    discount_percentage: "",
-    start_time: "",
-    end_time: "",
-  });
+function Countdown({ endTime }) {
+  const [remaining, setRemaining] = useState(0);
 
-  const fetch = async () => {
-    try {
-      const [fsRes, cropsRes] = await Promise.all([
-        flashSalesApi.getAll(false),
-        farmerApi.getMyCrops(),
-      ]);
-      setFlashSales(fsRes.data || []);
-      setCrops((cropsRes.data || []).filter((c) => c.status === "active"));
-    } catch {
-      toast.error("Failed to load flash sales.");
-    } finally {
-      setLoading(false);
-    }
-  };
+  useEffect(() => {
+    const update = () => {
+      const end = parseISO(endTime);
+      setRemaining(Math.max(0, differenceInSeconds(end, new Date())));
+    };
+    update();
+    const t = setInterval(update, 1000);
+    return () => clearInterval(t);
+  }, [endTime]);
 
-  useEffect(() => { fetch(); }, []);
+  if (remaining === 0) return <span className="text-red-500 text-xs font-semibold">Expired</span>;
 
-  const handleCreate = async (e) => {
-    e.preventDefault();
-    setSubmitting(true);
-    try {
-      await flashSalesApi.create({
-        crop_id: form.crop_id,
-        discount_percentage: Number(form.discount_percentage),
-        start_time: new Date(form.start_time).toISOString(),
-        end_time: new Date(form.end_time).toISOString(),
-      });
-      toast.success("Flash sale created!");
-      setShowForm(false);
-      setForm({ crop_id: "", discount_percentage: "", start_time: "", end_time: "" });
-      fetch();
-    } catch (err) {
-      toast.error(extractErrorMessage(err));
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  if (loading) return <PageLoader />;
+  const h = Math.floor(remaining / 3600);
+  const m = Math.floor((remaining % 3600) / 60);
+  const s = remaining % 60;
 
   return (
-    <div>
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="font-display text-2xl font-semibold text-ink">Flash Sales</h1>
-          <p className="mt-1 text-sm text-ink-soft">Create time-limited discounts to attract buyers</p>
+    <div className="flex gap-1.5">
+      {[[h, "h"], [m, "m"], [s, "s"]].map(([v, l]) => (
+        <div key={l} className="timer-unit" style={{ minWidth: 38, padding: "4px 8px" }}>
+          <span className="timer-number text-base">{String(v).padStart(2, "0")}</span>
+          <span className="timer-label">{l}</span>
         </div>
-        {!showForm && (
-          <Button variant="gold" onClick={() => setShowForm(true)}>
-            <Plus size={16} /> New Flash Sale
-          </Button>
-        )}
+      ))}
+    </div>
+  );
+}
+
+export default function FlashSales() {
+  const [crops, setCrops] = useState([]);
+  const [sales, setSales] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editSale, setEditSale] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({ crop_id: "", discount_percentage: "", start_time: "", end_time: "", is_active: true });
+  const toast = useToast();
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [cropsRes, salesRes] = await Promise.all([
+        farmerApi.getMyCrops(),
+        flashSalesApi.getAll(false),
+      ]);
+      const activeCrops = (cropsRes.data || []).filter(c => c.status === "active");
+      setCrops(activeCrops);
+      setSales(salesRes.data || []);
+    } catch { toast.error("Failed to load data"); }
+    finally { setLoading(false); }
+  }, [toast]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const openCreate = () => {
+    setEditSale(null);
+    const now = new Date();
+    const start = new Date(now.getTime() + 5 * 60000);
+    const end = new Date(now.getTime() + 25 * 60 * 60000);
+    setForm({
+      crop_id: crops[0]?.id || "",
+      discount_percentage: "",
+      start_time: start.toISOString().slice(0, 16),
+      end_time: end.toISOString().slice(0, 16),
+      is_active: true,
+    });
+    setModalOpen(true);
+  };
+
+  const openEdit = (sale) => {
+    setEditSale(sale);
+    setForm({
+      crop_id: sale.crop_id,
+      discount_percentage: sale.discount_percentage,
+      start_time: parseISO(sale.start_time).toISOString().slice(0, 16),
+      end_time: parseISO(sale.end_time).toISOString().slice(0, 16),
+      is_active: sale.is_active,
+    });
+    setModalOpen(true);
+  };
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    if (!form.crop_id) { toast.error("Select a crop"); return; }
+    const disc = Number(form.discount_percentage);
+    if (!disc || disc <= 0 || disc > 99) { toast.error("Discount must be between 1-99%"); return; }
+    if (!form.start_time || !form.end_time) { toast.error("Set start and end time"); return; }
+    if (new Date(form.end_time) <= new Date(form.start_time)) { toast.error("End time must be after start time"); return; }
+
+    setSaving(true);
+    try {
+      const payload = {
+        ...(!editSale ? { crop_id: form.crop_id } : {}),
+        discount_percentage: disc,
+        start_time: new Date(form.start_time).toISOString(),
+        end_time: new Date(form.end_time).toISOString(),
+        ...(editSale ? { is_active: form.is_active } : {}),
+      };
+      if (editSale) {
+        await flashSalesApi.update(editSale.id, payload);
+        toast.success("Flash sale updated!");
+      } else {
+        await flashSalesApi.create(payload);
+        toast.success("Flash sale created! Buyers are being notified.");
+      }
+      setModalOpen(false);
+      load();
+    } catch (err) { toast.error(err?.response?.data?.detail || "Failed to save flash sale"); }
+    finally { setSaving(false); }
+  };
+
+  const mySales = sales.filter(s => crops.some(c => c.id === s.crop_id) || s.crops?.farmer_id);
+
+  return (
+    <div className="page-enter space-y-6">
+      <div className="page-header flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="page-title">Flash Sales</h1>
+          <p className="page-subtitle">Create time-limited discounted offers to boost sales quickly</p>
+        </div>
+        <button onClick={openCreate} disabled={crops.length === 0} className="btn btn-amber">
+          <Plus size={16} /> Create Flash Sale
+        </button>
       </div>
 
-      {showForm && (
-        <div className="mb-8 rounded-2xl border border-paddy-100 bg-white p-6 shadow-sm">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="font-display text-lg font-semibold text-ink">Create Flash Sale</h2>
-            <button onClick={() => setShowForm(false)} className="text-ink-soft hover:text-ink">
-              <X size={20} />
-            </button>
-          </div>
-          <form onSubmit={handleCreate} className="space-y-4">
-            <Field label="Crop" required>
-              <Select
-                value={form.crop_id}
-                onChange={(e) => setForm({ ...form, crop_id: e.target.value })}
-                required
-              >
-                <option value="">Select a crop</option>
-                {crops.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name} — {formatCurrency(c.price_per_unit)}/{c.unit}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <Field label="Discount (%)" required>
-                <Input
-                  type="number"
-                  min="1"
-                  max="100"
-                  value={form.discount_percentage}
-                  onChange={(e) => setForm({ ...form, discount_percentage: e.target.value })}
-                  required
-                />
-              </Field>
-              <Field label="Start Time" required>
-                <Input
-                  type="datetime-local"
-                  value={form.start_time}
-                  onChange={(e) => setForm({ ...form, start_time: e.target.value })}
-                  required
-                />
-              </Field>
-              <Field label="End Time" required>
-                <Input
-                  type="datetime-local"
-                  value={form.end_time}
-                  onChange={(e) => setForm({ ...form, end_time: e.target.value })}
-                  required
-                />
-              </Field>
-            </div>
-            <div className="flex justify-end gap-3">
-              <Button type="button" variant="ghost" onClick={() => setShowForm(false)}>Cancel</Button>
-              <Button type="submit" variant="gold" loading={submitting}>Create Flash Sale</Button>
-            </div>
-          </form>
+      {crops.length === 0 && !loading && (
+        <div className="card p-4 flex items-center gap-3 bg-amber-50 border border-amber-200">
+          <AlertTriangle size={18} className="text-amber-600 flex-shrink-0" />
+          <p className="text-sm text-amber-800">You need at least one <strong>active crop</strong> to create a flash sale.</p>
         </div>
       )}
 
-      {flashSales.length === 0 ? (
-        <EmptyState
-          icon={<TrendingUp size={40} />}
-          title="No flash sales"
-          description="Run flash sales to boost visibility and sell crops fast."
-          action={
-            <Button variant="gold" onClick={() => setShowForm(true)}>
-              <Plus size={16} /> Create Flash Sale
-            </Button>
-          }
-        />
+      {loading ? (
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          {[1,2,3].map(i => <SkeletonCard key={i} />)}
+        </div>
+      ) : sales.length === 0 ? (
+        <div className="card">
+          <EmptyState
+            type="crops"
+            title="No flash sales yet"
+            description="Create your first flash sale to notify buyers of limited-time discounts on your crops."
+            action={crops.length > 0 ? openCreate : undefined}
+            actionLabel="Create Flash Sale"
+            icon={Zap}
+          />
+        </div>
       ) : (
-        <div className="space-y-3">
-          {flashSales.map((fs) => (
-            <div key={fs.id} className="rounded-xl border border-paddy-100 bg-white p-5 shadow-sm">
-              <div className="flex items-start justify-between">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-semibold text-ink">{fs.crops?.name || fs.crop_name || `Flash Sale #${fs.id.slice(0, 8)}`}</h3>
-                    <Badge tone={fs.is_active ? "gold" : "neutral"}>
-                      {fs.is_active ? "Active" : "Inactive"}
-                    </Badge>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          {sales.map((sale, i) => {
+            const crop = sale.crops;
+            const isActive = sale.is_active && !isPast(parseISO(sale.end_time));
+            const originalPrice = crop?.price_per_unit || 0;
+            const discounted = originalPrice - (originalPrice * sale.discount_percentage / 100);
+            return (
+              <div key={sale.id} className={`card overflow-hidden animate-fade-in ${isActive ? "border-amber-200" : "opacity-75"}`} style={{ animationDelay: `${i * 60}ms` }}>
+                {/* Header gradient */}
+                <div className={`h-2 ${isActive ? "bg-gradient-to-r from-amber-400 to-red-500" : "bg-slate-300"}`} />
+                <div className="p-5">
+                  <div className="flex items-start justify-between mb-4">
+                    <div>
+                      <h3 className="font-bold text-slate-900">{crop?.name || "Crop"}</h3>
+                      <p className="text-xs text-slate-500">{crop?.location || ""}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {isActive ? (
+                        <span className="badge-flash text-xs px-2.5 py-1 rounded-full flex items-center gap-1">
+                          <Zap size={11} /> Live
+                        </span>
+                      ) : (
+                        <span className="badge-sold text-xs px-2.5 py-1 rounded-full">Ended</span>
+                      )}
+                    </div>
                   </div>
-                  <div className="mt-1 space-y-0.5 text-sm text-ink-soft">
-                    <p>Discount: <span className="font-bold text-gold-600">{fs.discount_percentage}% OFF</span></p>
-                    <p>Start: {formatDateTime(fs.start_time)}</p>
-                    <p>End: {formatDateTime(fs.end_time)}</p>
+
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="bg-amber-50 rounded-xl px-4 py-2 text-center">
+                      <p className="text-3xl font-bold text-amber-600">{sale.discount_percentage}%</p>
+                      <p className="text-xs text-amber-700">OFF</p>
+                    </div>
+                    <div>
+                      <p className="text-slate-400 line-through text-sm">₹{originalPrice}/{crop?.unit || "unit"}</p>
+                      <p className="text-green-700 font-bold text-xl">₹{discounted.toFixed(2)}/{crop?.unit || "unit"}</p>
+                    </div>
                   </div>
+
+                  {isActive && (
+                    <div className="mb-4">
+                      <p className="text-xs text-slate-500 mb-2 flex items-center gap-1"><Clock size={11} /> Ends in:</p>
+                      <Countdown endTime={sale.end_time} />
+                    </div>
+                  )}
+
+                  <div className="text-xs text-slate-500 space-y-1 mb-4">
+                    <p>Start: {format(parseISO(sale.start_time), "dd MMM, HH:mm")}</p>
+                    <p>End: {format(parseISO(sale.end_time), "dd MMM, HH:mm")}</p>
+                    {crop?.quantity && <p>Stock: {crop.quantity} {crop.unit}</p>}
+                  </div>
+
+                  <button onClick={() => openEdit(sale)} className="btn btn-secondary w-full btn-sm">
+                    <Edit2 size={13} /> Edit Sale
+                  </button>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
+
+      {/* Modal */}
+      <Modal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        title={editSale ? "Edit Flash Sale" : "Create Flash Sale"}
+        subtitle="Set discount and time window"
+        size="md"
+      >
+        <form onSubmit={handleSave} className="space-y-4">
+          {!editSale && (
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1.5">Select Crop <span className="text-red-500">*</span></label>
+              <select value={form.crop_id} onChange={e => setForm(f => ({ ...f, crop_id: e.target.value }))} className="input-field" required>
+                <option value="">— Select crop —</option>
+                {crops.map(c => <option key={c.id} value={c.id}>{c.name} ({c.quantity} {c.unit} @ ₹{c.price_per_unit})</option>)}
+              </select>
+            </div>
+          )}
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-1.5">Discount Percentage <span className="text-red-500">*</span></label>
+            <div className="relative">
+              <Percent size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input type="number" min="1" max="99" value={form.discount_percentage} onChange={e => setForm(f => ({ ...f, discount_percentage: e.target.value }))} placeholder="e.g. 25" className="input-field pl-9" required />
+            </div>
+          </div>
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1.5">Start Time <span className="text-red-500">*</span></label>
+              <input type="datetime-local" value={form.start_time} onChange={e => setForm(f => ({ ...f, start_time: e.target.value }))} className="input-field" required />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1.5">End Time <span className="text-red-500">*</span></label>
+              <input type="datetime-local" value={form.end_time} onChange={e => setForm(f => ({ ...f, end_time: e.target.value }))} className="input-field" required />
+            </div>
+          </div>
+          {editSale && (
+            <div className="flex items-center gap-3">
+              <input type="checkbox" id="is_active" checked={form.is_active} onChange={e => setForm(f => ({ ...f, is_active: e.target.checked }))} className="w-4 h-4 accent-green-600" />
+              <label htmlFor="is_active" className="text-sm font-medium text-slate-700">Active (buyers can see this sale)</label>
+            </div>
+          )}
+          <div className="flex gap-3 pt-2 justify-end border-t border-slate-100">
+            <button type="button" onClick={() => setModalOpen(false)} className="btn btn-secondary">Cancel</button>
+            <button type="submit" disabled={saving} className="btn btn-amber">
+              {saving ? "Saving..." : editSale ? "Update Sale" : <><Zap size={14} /> Launch Flash Sale</>}
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

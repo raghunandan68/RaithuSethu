@@ -1,137 +1,198 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
+import { ClipboardList, Send, MapPin, Calendar, DollarSign, User, Package } from "lucide-react";
 import { farmerApi } from "../../api/farmer";
 import { useToast } from "../../context/ToastContext";
-import { extractErrorMessage, formatCurrency } from "../../utils/format";
-import Button from "../../components/common/Button";
-import { PageLoader, EmptyState, Badge } from "../../components/common/Feedback";
-import { Field, Input, TextArea } from "../../components/common/Field";
-import { User, Send, X } from "lucide-react";
+import Modal from "../../components/ui/Modal";
+import { CategoryBadge } from "../../components/ui/Badge";
+import { SkeletonTable } from "../../components/ui/Skeleton";
+import EmptyState from "../../components/ui/EmptyState";
+import { format, parseISO } from "date-fns";
 
 export default function BuyerRequirements() {
-  const toast = useToast();
   const [requirements, setRequirements] = useState([]);
+  const [myCrops, setMyCrops] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [responding, setResponding] = useState(null);
+  const [respondModal, setRespondModal] = useState(null);
   const [responseForm, setResponseForm] = useState({ crop_id: "", offered_price: "", message: "" });
-  const [submitting, setSubmitting] = useState(false);
+  const [responding, setResponding] = useState(false);
+  const toast = useToast();
 
-  const fetch = async () => {
+  const load = async () => {
+    setLoading(true);
     try {
-      const res = await farmerApi.getBuyerRequirements();
-      setRequirements(res.data || []);
-    } catch {
-      toast.error("Failed to load buyer requirements.");
-    } finally {
-      setLoading(false);
-    }
+      const [reqRes, cropsRes] = await Promise.all([
+        farmerApi.getBuyerRequirements(),
+        farmerApi.getMyCrops(),
+      ]);
+      setRequirements(reqRes.data || []);
+      setMyCrops((cropsRes.data || []).filter(c => c.status === "active"));
+    } catch { toast.error("Failed to load requirements"); }
+    finally { setLoading(false); }
   };
 
-  useEffect(() => { fetch(); }, []);
+  useEffect(() => { load(); }, []);
 
-  const handleRespond = async (reqId) => {
-    setSubmitting(true);
+  const openRespond = (req) => {
+    setRespondModal(req);
+    setResponseForm({ crop_id: myCrops[0]?.id || "", offered_price: "", message: "" });
+  };
+
+  const handleRespond = async (e) => {
+    e.preventDefault();
+    if (!responseForm.crop_id) { toast.error("Select a crop to offer"); return; }
+    if (!responseForm.offered_price || Number(responseForm.offered_price) <= 0) { toast.error("Enter a valid offered price"); return; }
+    setResponding(true);
     try {
       await farmerApi.respondToRequirement({
-        requirement_id: reqId,
-        ...responseForm,
+        requirement_id: respondModal.id,
+        crop_id: responseForm.crop_id,
         offered_price: Number(responseForm.offered_price),
+        message: responseForm.message,
       });
-      toast.success("Response sent to buyer!");
-      setResponding(null);
-      setResponseForm({ crop_id: "", offered_price: "", message: "" });
-    } catch (err) {
-      toast.error(extractErrorMessage(err));
-    } finally {
-      setSubmitting(false);
-    }
+      toast.success("Response sent successfully!");
+      setRespondModal(null);
+    } catch (err) { toast.error(err?.response?.data?.detail || "Failed to send response"); }
+    finally { setResponding(false); }
   };
 
-  if (loading) return <PageLoader />;
-
   return (
-    <div>
-      <div className="mb-6">
-        <h1 className="font-display text-2xl font-semibold text-ink">Buyer Requirements</h1>
-        <p className="mt-1 text-sm text-ink-soft">Browse what buyers are looking for and respond with your crops</p>
+    <div className="page-enter space-y-6">
+      <div className="page-header">
+        <h1 className="page-title">Buyer Requirements</h1>
+        <p className="page-subtitle">Browse what buyers need and respond with your available crops</p>
       </div>
 
-      {requirements.length === 0 ? (
-        <EmptyState
-          icon={<User size={40} />}
-          title="No requirements posted yet"
-          description="Buyers haven't posted any requirements yet."
-        />
+      {loading ? (
+        <SkeletonTable rows={5} />
+      ) : requirements.length === 0 ? (
+        <div className="card">
+          <EmptyState
+            type="requests"
+            title="No buyer requirements posted"
+            description="When buyers post requirements, they'll appear here. Check back later."
+          />
+        </div>
       ) : (
-        <div className="space-y-3">
-          {requirements.filter(r => r.is_active !== false).map((req) => (
-            <div key={req.id} className="rounded-xl border border-paddy-100 bg-white p-5 shadow-sm">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1">
-                  <h3 className="font-semibold text-ink">{req.crop_name}</h3>
-                  <div className="mt-1 space-y-0.5 text-sm text-ink-soft">
-                    <p>Category: {req.category || "—"}</p>
-                    <p>Quantity: <span className="font-semibold">{req.quantity} {req.unit || "kg"}</span></p>
-                    <p>Max Price: <span className="font-semibold">{formatCurrency(req.max_price)}</span></p>
-                    {req.location && <p>Location: {req.location}</p>}
-                    {req.description && (
-                      <p className="mt-1 italic text-ink-soft/70">&ldquo;{req.description}&rdquo;</p>
-                    )}
-                  </div>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          {requirements.map((req, i) => (
+            <div key={req.id} className="card p-5 card-interactive animate-fade-in" style={{ animationDelay: `${i * 60}ms` }}>
+              <div className="flex items-start justify-between mb-4">
+                <div>
+                  <h3 className="font-bold text-slate-900 text-base">{req.crop_name}</h3>
+                  <CategoryBadge category={req.category} />
                 </div>
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onClick={() => setResponding(responding === req.id ? null : req.id)}
-                >
-                  {responding === req.id ? <X size={14} /> : <Send size={14} />}
-                  {responding === req.id ? "Cancel" : "Respond"}
-                </Button>
+                <div className="w-9 h-9 bg-blue-50 rounded-xl flex items-center justify-center">
+                  <Package size={16} className="text-blue-600" />
+                </div>
               </div>
 
-              {responding === req.id && (
-                <div className="mt-4 rounded-lg border border-paddy-100 bg-paddy-50 p-4">
-                  <h4 className="mb-3 text-sm font-semibold text-ink">Respond to Requirement</h4>
-                  <div className="space-y-3">
-                    <div className="grid grid-cols-2 gap-3">
-                      <Field label="Your Crop ID">
-                        <Input
-                          placeholder="Enter your crop ID"
-                          value={responseForm.crop_id}
-                          onChange={(e) => setResponseForm({ ...responseForm, crop_id: e.target.value })}
-                        />
-                      </Field>
-                      <Field label="Offered Price (₹)">
-                        <Input
-                          type="number"
-                          placeholder="Your price"
-                          value={responseForm.offered_price}
-                          onChange={(e) => setResponseForm({ ...responseForm, offered_price: e.target.value })}
-                        />
-                      </Field>
-                    </div>
-                    <Field label="Message">
-                      <TextArea
-                        rows={2}
-                        placeholder="Optional message..."
-                        value={responseForm.message}
-                        onChange={(e) => setResponseForm({ ...responseForm, message: e.target.value })}
-                      />
-                    </Field>
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      onClick={() => handleRespond(req.id)}
-                      loading={submitting}
-                    >
-                      Send Response
-                    </Button>
-                  </div>
+              <div className="space-y-2 mb-4">
+                <div className="flex items-center gap-2 text-sm text-slate-600">
+                  <Package size={13} className="text-slate-400" />
+                  <span><strong>{req.quantity} {req.unit}</strong> required</span>
                 </div>
+                <div className="flex items-center gap-2 text-sm text-slate-600">
+                  <DollarSign size={13} className="text-slate-400" />
+                  <span>Max budget: <strong className="text-green-700">₹{req.max_price}/{req.unit}</strong></span>
+                </div>
+                {req.location && (
+                  <div className="flex items-center gap-2 text-sm text-slate-600">
+                    <MapPin size={13} className="text-slate-400" />
+                    <span>{req.location}</span>
+                  </div>
+                )}
+                {req.required_by && (
+                  <div className="flex items-center gap-2 text-sm text-slate-600">
+                    <Calendar size={13} className="text-slate-400" />
+                    <span>Needed by: {format(parseISO(req.required_by), "dd MMM yyyy")}</span>
+                  </div>
+                )}
+                {req["users!buyer_id"] && (
+                  <div className="flex items-center gap-2 text-sm text-slate-500">
+                    <User size={13} className="text-slate-400" />
+                    <span>{req["users!buyer_id"].name}</span>
+                  </div>
+                )}
+              </div>
+
+              {req.description && (
+                <p className="text-xs text-slate-500 bg-slate-50 rounded-lg p-2.5 mb-4 leading-relaxed">{req.description}</p>
               )}
+
+              <button
+                onClick={() => openRespond(req)}
+                disabled={myCrops.length === 0}
+                className="btn btn-primary w-full btn-sm"
+              >
+                <Send size={13} />
+                {myCrops.length === 0 ? "No Active Crops" : "Respond with Crop"}
+              </button>
             </div>
           ))}
         </div>
       )}
+
+      {/* Response Modal */}
+      <Modal
+        open={!!respondModal}
+        onClose={() => setRespondModal(null)}
+        title="Respond to Requirement"
+        subtitle={respondModal ? `For: ${respondModal.crop_name}` : ""}
+        size="md"
+      >
+        {respondModal && (
+          <form onSubmit={handleRespond} className="space-y-4">
+            <div className="bg-slate-50 rounded-xl p-4">
+              <p className="text-sm text-slate-600">
+                <strong>{respondModal.crop_name}</strong> — {respondModal.quantity} {respondModal.unit} needed. Max: ₹{respondModal.max_price}/{respondModal.unit}
+              </p>
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1.5">Select Your Crop <span className="text-red-500">*</span></label>
+              <select
+                value={responseForm.crop_id}
+                onChange={e => setResponseForm(f => ({ ...f, crop_id: e.target.value }))}
+                className="input-field"
+                required
+              >
+                <option value="">— Select crop —</option>
+                {myCrops.map(c => (
+                  <option key={c.id} value={c.id}>{c.name} ({c.quantity} {c.unit} @ ₹{c.price_per_unit})</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1.5">Your Offered Price (₹/{respondModal.unit}) <span className="text-red-500">*</span></label>
+              <input
+                type="number"
+                min="0.01"
+                step="0.01"
+                value={responseForm.offered_price}
+                onChange={e => setResponseForm(f => ({ ...f, offered_price: e.target.value }))}
+                placeholder={`Max: ₹${respondModal.max_price}`}
+                className="input-field"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1.5">Message (optional)</label>
+              <textarea
+                value={responseForm.message}
+                onChange={e => setResponseForm(f => ({ ...f, message: e.target.value }))}
+                rows={3}
+                placeholder="Additional info, delivery terms, quality notes..."
+                className="input-field resize-none"
+              />
+            </div>
+            <div className="flex gap-3 pt-2 justify-end border-t border-slate-100">
+              <button type="button" onClick={() => setRespondModal(null)} className="btn btn-secondary">Cancel</button>
+              <button type="submit" disabled={responding} className="btn btn-primary">
+                {responding ? "Sending..." : <><Send size={14} /> Send Response</>}
+              </button>
+            </div>
+          </form>
+        )}
+      </Modal>
     </div>
   );
 }

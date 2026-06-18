@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ToastProvider } from "./context/ToastContext";
 import { AuthProvider } from "./context/AuthContext";
 import { SocketProvider } from "./context/SocketContext";
@@ -20,19 +20,20 @@ import FarmerBookings from "./pages/farmer/MyBookings";
 import FlashSales from "./pages/farmer/FlashSales";
 
 import Marketplace from "./pages/buyer/Marketplace";
-import CropDetails from "./pages/buyer/CropDetails";
 import MyRequests from "./pages/buyer/MyRequests";
-import MyRequirements from "./pages/buyer/MyRequirements";
+import MyRequirementsBuyer from "./pages/buyer/MyRequirements";
 import BuyerBookings from "./pages/buyer/MyBookings";
 
 import Chat from "./pages/shared/Chat";
-import NotificationsPage from "./pages/shared/NotificationsPage";
-import Pricing from "./pages/shared/Pricing";
+import Notifications from "./pages/shared/Notifications";
+import PricingTrends from "./pages/shared/PricingTrends";
 
 import AdminDashboard from "./pages/admin/Dashboard";
-import ManageFarmers from "./pages/admin/ManageFarmers";
-import ManageBuyers from "./pages/admin/ManageBuyers";
+import Farmers from "./pages/admin/Farmers";
+import Buyers from "./pages/admin/Buyers";
 import Analytics from "./pages/admin/Analytics";
+
+import NotFound from "./pages/NotFound";
 
 function AppRoutes() {
   return (
@@ -51,21 +52,20 @@ function AppRoutes() {
       <Route path="/farmer/flash-sales" element={<ProtectedRoute allowedRole="farmer"><PageLayout><FlashSales /></PageLayout></ProtectedRoute>} />
 
       <Route path="/buyer/marketplace" element={<PageLayout><Marketplace /></PageLayout>} />
-      <Route path="/buyer/crop/:id" element={<PageLayout><CropDetails /></PageLayout>} />
       <Route path="/buyer/requests" element={<ProtectedRoute allowedRole="buyer"><PageLayout><MyRequests /></PageLayout></ProtectedRoute>} />
-      <Route path="/buyer/requirements" element={<ProtectedRoute allowedRole="buyer"><PageLayout><MyRequirements /></PageLayout></ProtectedRoute>} />
+      <Route path="/buyer/requirements" element={<ProtectedRoute allowedRole="buyer"><PageLayout><MyRequirementsBuyer /></PageLayout></ProtectedRoute>} />
       <Route path="/buyer/bookings" element={<ProtectedRoute allowedRole="buyer"><PageLayout><BuyerBookings /></PageLayout></ProtectedRoute>} />
 
       <Route path="/chat" element={<ProtectedRoute><PageLayout maxWidth="max-w-5xl"><Chat /></PageLayout></ProtectedRoute>} />
-      <Route path="/notifications" element={<ProtectedRoute><PageLayout><NotificationsPage /></PageLayout></ProtectedRoute>} />
-      <Route path="/pricing" element={<ProtectedRoute><PageLayout><Pricing /></PageLayout></ProtectedRoute>} />
+      <Route path="/notifications" element={<ProtectedRoute><PageLayout><Notifications /></PageLayout></ProtectedRoute>} />
+      <Route path="/pricing" element={<PageLayout><PricingTrends /></PageLayout>} />
 
       <Route path="/admin" element={<ProtectedRoute allowedRole="admin"><PageLayout><AdminDashboard /></PageLayout></ProtectedRoute>} />
-      <Route path="/admin/farmers" element={<ProtectedRoute allowedRole="admin"><PageLayout><ManageFarmers /></PageLayout></ProtectedRoute>} />
-      <Route path="/admin/buyers" element={<ProtectedRoute allowedRole="admin"><PageLayout><ManageBuyers /></PageLayout></ProtectedRoute>} />
+      <Route path="/admin/farmers" element={<ProtectedRoute allowedRole="admin"><PageLayout><Farmers /></PageLayout></ProtectedRoute>} />
+      <Route path="/admin/buyers" element={<ProtectedRoute allowedRole="admin"><PageLayout><Buyers /></PageLayout></ProtectedRoute>} />
       <Route path="/admin/analytics" element={<ProtectedRoute allowedRole="admin"><PageLayout><Analytics /></PageLayout></ProtectedRoute>} />
 
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="*" element={<NotFound />} />
     </Routes>
   );
 }

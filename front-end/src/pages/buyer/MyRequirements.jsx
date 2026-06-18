@@ -1,205 +1,227 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
+import { Plus, Edit2, Trash2, Calendar, MapPin, DollarSign, Package } from "lucide-react";
 import { buyerApi } from "../../api/buyer";
 import { useToast } from "../../context/ToastContext";
-import { extractErrorMessage, CROP_CATEGORIES, CROP_UNITS } from "../../utils/format";
-import Button from "../../components/common/Button";
-import { PageLoader, EmptyState, Badge } from "../../components/common/Feedback";
-import { Field, Input, TextArea, Select } from "../../components/common/Field";
-import { User, Plus, X, Edit2 } from "lucide-react";
+import Modal, { ConfirmModal } from "../../components/ui/Modal";
+import { CategoryBadge, StatusBadge } from "../../components/ui/Badge";
+import { SkeletonCard } from "../../components/ui/Skeleton";
+import EmptyState from "../../components/ui/EmptyState";
+import { format, parseISO } from "date-fns";
 
-export default function MyRequirements() {
-  const toast = useToast();
+const CATEGORIES = ["Vegetables", "Fruits", "Grains", "Dairy", "Spices", "Pulses", "Others"];
+
+const EMPTY_FORM = {
+  crop_name: "", category: "Vegetables", quantity: "", unit: "kg",
+  max_price: "", location: "", required_by: "", description: ""
+};
+
+export default function BuyerRequirements() {
   const [requirements, setRequirements] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
-  const [editing, setEditing] = useState(null);
-  const [submitting, setSubmitting] = useState(false);
-  const [form, setForm] = useState({
-    crop_name: "",
-    category: "",
-    quantity: "",
-    unit: "kg",
-    max_price: "",
-    location: "",
-    required_by: "",
-    description: "",
-  });
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editReq, setEditReq] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState(EMPTY_FORM);
+  const toast = useToast();
 
-  const fetch = async () => {
+  const load = async () => {
+    setLoading(true);
     try {
       const res = await buyerApi.getMyRequirements();
       setRequirements(res.data || []);
-    } catch {
-      toast.error("Failed to load requirements.");
-    } finally {
-      setLoading(false);
-    }
+    } catch { toast.error("Failed to load requirements"); }
+    finally { setLoading(false); }
   };
 
-  useEffect(() => { fetch(); }, []);
+  useEffect(() => { load(); }, []);
 
-  const resetForm = () => {
-    setForm({ crop_name: "", category: "", quantity: "", unit: "kg", max_price: "", location: "", required_by: "", description: "" });
-    setShowForm(false);
-    setEditing(null);
-  };
-
-  const handleEdit = (req) => {
-    setEditing(req);
+  const openAdd = () => { setEditReq(null); setForm(EMPTY_FORM); setModalOpen(true); };
+  const openEdit = (req) => {
+    setEditReq(req);
     setForm({
-      crop_name: req.crop_name || "",
-      category: req.category || "",
-      quantity: req.quantity?.toString() || "",
-      unit: req.unit || "kg",
-      max_price: req.max_price?.toString() || "",
-      location: req.location || "",
-      required_by: req.required_by?.slice(0, 10) || "",
-      description: req.description || "",
+      crop_name: req.crop_name, category: req.category, quantity: req.quantity,
+      unit: req.unit, max_price: req.max_price, location: req.location || "",
+      required_by: req.required_by ? req.required_by.slice(0, 10) : "",
+      description: req.description || ""
     });
-    setShowForm(true);
+    setModalOpen(true);
   };
 
-  const handleSubmit = async (e) => {
+  const handleSave = async (e) => {
     e.preventDefault();
-    setSubmitting(true);
+    setSaving(true);
     try {
       const payload = {
-        crop_name: form.crop_name,
-        category: form.category,
+        ...form,
         quantity: Number(form.quantity),
-        unit: form.unit,
         max_price: Number(form.max_price),
-        location: form.location || undefined,
-        required_by: form.required_by ? new Date(form.required_by).toISOString() : undefined,
-        description: form.description || undefined,
+        required_by: form.required_by || null,
       };
-      if (editing) {
-        await buyerApi.updateRequirement(editing.id, payload);
-        toast.success("Requirement updated!");
+      if (editReq) {
+        await buyerApi.updateRequirement(editReq.id, payload);
+        toast.success("Requirement updated");
       } else {
         await buyerApi.createRequirement(payload);
-        toast.success("Requirement posted! Farmers can now respond.");
+        toast.success("Requirement posted to all farmers!");
       }
-      resetForm();
-      fetch();
-    } catch (err) {
-      toast.error(extractErrorMessage(err));
-    } finally {
-      setSubmitting(false);
-    }
+      setModalOpen(false);
+      load();
+    } catch (err) { toast.error(err?.response?.data?.detail || "Failed to save requirement"); }
+    finally { setSaving(false); }
   };
 
-  if (loading) return <PageLoader />;
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      await buyerApi.deleteRequirement(deleteTarget.id);
+      toast.success("Requirement deleted");
+      setDeleteTarget(null);
+      load();
+    } catch { toast.error("Failed to delete requirement"); }
+  };
 
   return (
-    <div>
-      <div className="mb-6 flex items-center justify-between">
+    <div className="page-enter space-y-6">
+      <div className="page-header flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="font-display text-2xl font-semibold text-ink">My Requirements</h1>
-          <p className="mt-1 text-sm text-ink-soft">Let farmers know what crops you need</p>
+          <h1 className="page-title">My Requirements</h1>
+          <p className="page-subtitle">Post bulk needs to let farmers come to you</p>
         </div>
-        {!showForm && (
-          <Button variant="primary" onClick={() => setShowForm(true)}>
-            <Plus size={16} /> New Requirement
-          </Button>
-        )}
+        <button onClick={openAdd} className="btn btn-primary">
+          <Plus size={16} /> Post Requirement
+        </button>
       </div>
 
-      {showForm && (
-        <div className="mb-8 rounded-2xl border border-paddy-100 bg-white p-6 shadow-sm">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="font-display text-lg font-semibold text-ink">
-              {editing ? "Edit Requirement" : "Post a Requirement"}
-            </h2>
-            <button onClick={resetForm} className="text-ink-soft hover:text-ink"><X size={20} /></button>
-          </div>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <Field label="Crop Name" required>
-                <Input value={form.crop_name} onChange={(e) => setForm({ ...form, crop_name: e.target.value })} required />
-              </Field>
-              <Field label="Category" required>
-                <Select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} required>
-                  <option value="">Select</option>
-                  {CROP_CATEGORIES.map((c) => (<option key={c} value={c}>{c}</option>))}
-                </Select>
-              </Field>
-            </div>
-            <div className="grid grid-cols-3 gap-4">
-              <Field label="Quantity" required>
-                <Input type="number" min="0" step="any" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} required />
-              </Field>
-              <Field label="Unit">
-                <Select value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })}>
-                  {CROP_UNITS.map((u) => (<option key={u} value={u}>{u}</option>))}
-                </Select>
-              </Field>
-              <Field label="Max Price (₹)" required>
-                <Input type="number" min="0" step="any" value={form.max_price} onChange={(e) => setForm({ ...form, max_price: e.target.value })} required />
-              </Field>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <Field label="Location" hint="Optional">
-                <Input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
-              </Field>
-              <Field label="Required By" hint="Optional">
-                <Input type="date" value={form.required_by} onChange={(e) => setForm({ ...form, required_by: e.target.value })} />
-              </Field>
-            </div>
-            <Field label="Description" hint="Optional">
-              <TextArea rows={2} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
-            </Field>
-            <div className="flex justify-end gap-3">
-              <Button type="button" variant="ghost" onClick={resetForm}>Cancel</Button>
-              <Button type="submit" variant="primary" loading={submitting}>
-                {editing ? "Update" : "Post Requirement"}
-              </Button>
-            </div>
-          </form>
+      {loading ? (
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          {[1,2,3].map(i => <SkeletonCard key={i} />)}
         </div>
-      )}
-
-      {requirements.length === 0 ? (
-        <EmptyState
-          icon={<User size={40} />}
-          title="No requirements posted"
-          description="Post what you need and farmers will respond with offers."
-          action={
-            <Button variant="primary" onClick={() => setShowForm(true)}>
-              <Plus size={16} /> Post Your First Requirement
-            </Button>
-          }
-        />
+      ) : requirements.length === 0 ? (
+        <div className="card">
+          <EmptyState
+            type="requests"
+            title="No requirements posted"
+            description="Can't find what you need in the marketplace? Post a requirement and let farmers bid."
+            action={openAdd}
+            actionLabel="Post Requirement"
+          />
+        </div>
       ) : (
-        <div className="space-y-3">
-          {requirements.map((req) => (
-            <div key={req.id} className="rounded-xl border border-paddy-100 bg-white p-5 shadow-sm">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-semibold text-ink">{req.crop_name}</h3>
-                    <Badge tone={req.is_active ? "paddy" : "neutral"}>
-                      {req.is_active ? "Active" : "Inactive"}
-                    </Badge>
-                  </div>
-                  <div className="mt-2 space-y-0.5 text-sm text-ink-soft">
-                    <p>{req.quantity} {req.unit} | Max ₹{req.max_price}</p>
-                    {req.location && <p>Location: {req.location}</p>}
-                    {req.description && <p className="italic">{req.description}</p>}
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          {requirements.map((req, i) => (
+            <div key={req.id} className="card p-5 animate-fade-in" style={{ animationDelay: `${i * 60}ms` }}>
+              <div className="flex items-start justify-between mb-4">
+                <div>
+                  <h3 className="font-bold text-slate-900 text-lg">{req.crop_name}</h3>
+                  <div className="flex gap-2 mt-1.5">
+                    <CategoryBadge category={req.category} />
+                    <StatusBadge status={req.status} />
                   </div>
                 </div>
-                <button
-                  onClick={() => handleEdit(req)}
-                  className="rounded-lg p-2 text-ink-soft hover:bg-paddy-100"
-                  title="Edit"
-                >
-                  <Edit2 size={15} />
+              </div>
+
+              <div className="space-y-2 mb-5">
+                <div className="flex items-center gap-2 text-sm text-slate-600">
+                  <Package size={14} className="text-slate-400" />
+                  <span><strong>{req.quantity} {req.unit}</strong> required</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm text-slate-600">
+                  <DollarSign size={14} className="text-slate-400" />
+                  <span>Max budget: <strong className="text-green-700">₹{req.max_price}/{req.unit}</strong></span>
+                </div>
+                {req.location && (
+                  <div className="flex items-center gap-2 text-sm text-slate-600">
+                    <MapPin size={14} className="text-slate-400" />
+                    <span className="truncate">{req.location}</span>
+                  </div>
+                )}
+                {req.required_by && (
+                  <div className="flex items-center gap-2 text-sm text-slate-600">
+                    <Calendar size={14} className="text-slate-400" />
+                    <span>Needed by: {format(parseISO(req.required_by), "dd MMM yyyy")}</span>
+                  </div>
+                )}
+              </div>
+
+              {req.description && (
+                <p className="text-xs text-slate-500 bg-slate-50 rounded-lg p-2.5 mb-5 line-clamp-3">{req.description}</p>
+              )}
+
+              <div className="flex gap-2 pt-4 border-t border-slate-100">
+                <button onClick={() => openEdit(req)} className="btn btn-secondary flex-1 btn-sm">
+                  <Edit2 size={13} /> Edit
+                </button>
+                <button onClick={() => setDeleteTarget(req)} className="btn btn-danger btn-icon btn-sm">
+                  <Trash2 size={13} />
                 </button>
               </div>
             </div>
           ))}
         </div>
       )}
+
+      <Modal
+        open={modalOpen} onClose={() => setModalOpen(false)}
+        title={editReq ? "Edit Requirement" : "Post New Requirement"}
+        subtitle="Farmers will see this and can respond with their crops"
+        size="md"
+      >
+        <form onSubmit={handleSave} className="space-y-4">
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1.5">Crop Name <span className="text-red-500">*</span></label>
+              <input type="text" value={form.crop_name} onChange={e => setForm(f => ({ ...f, crop_name: e.target.value }))} placeholder="e.g. Potatoes" className="input-field" required />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1.5">Category</label>
+              <select value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))} className="input-field">
+                {CATEGORIES.map(c => <option key={c}>{c}</option>)}
+              </select>
+            </div>
+          </div>
+          <div className="grid sm:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1.5">Qty <span className="text-red-500">*</span></label>
+              <input type="number" min="1" value={form.quantity} onChange={e => setForm(f => ({ ...f, quantity: e.target.value }))} className="input-field" required />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1.5">Unit</label>
+              <select value={form.unit} onChange={e => setForm(f => ({ ...f, unit: e.target.value }))} className="input-field">
+                <option>kg</option><option>ton</option><option>quintal</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1.5">Max ₹/Unit <span className="text-red-500">*</span></label>
+              <input type="number" min="0.1" step="0.1" value={form.max_price} onChange={e => setForm(f => ({ ...f, max_price: e.target.value }))} className="input-field" required />
+            </div>
+          </div>
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1.5">Location Pref.</label>
+              <input type="text" value={form.location} onChange={e => setForm(f => ({ ...f, location: e.target.value }))} placeholder="e.g. Any, or Guntur" className="input-field" />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1.5">Needed By</label>
+              <input type="date" value={form.required_by} onChange={e => setForm(f => ({ ...f, required_by: e.target.value }))} className="input-field" />
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-1.5">Description</label>
+            <textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={2} placeholder="Quality expectations, transport terms..." className="input-field resize-none" />
+          </div>
+          <div className="flex gap-3 pt-2 justify-end border-t border-slate-100">
+            <button type="button" onClick={() => setModalOpen(false)} className="btn btn-secondary">Cancel</button>
+            <button type="submit" disabled={saving} className="btn btn-primary">{saving ? "Saving..." : "Post Requirement"}</button>
+          </div>
+        </form>
+      </Modal>
+
+      <ConfirmModal
+        open={!!deleteTarget} onClose={() => setDeleteTarget(null)} onConfirm={handleDelete}
+        title="Delete Requirement" description="Are you sure? Farmers will no longer see this requirement."
+        confirmLabel="Delete" confirmVariant="danger"
+      />
     </div>
   );
 }
