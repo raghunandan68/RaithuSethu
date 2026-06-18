@@ -1,0 +1,123 @@
+@import "tailwindcss";
+
+@theme {
+  /* ── Raithu Sethu palette ─────────────────────────────── */
+  --color-paddy-50: #f3f7f1;
+  --color-paddy-100: #e1ebdc;
+  --color-paddy-200: #c2d8b8;
+  --color-paddy-300: #9bbf8b;
+  --color-paddy-400: #6f9d5e;
+  --color-paddy-500: #4c7d3f;
+  --color-paddy-600: #356430;
+  --color-paddy-700: #284f27;
+  --color-paddy-800: #1f4d2c;
+  --color-paddy-900: #15331c;
+
+  --color-gold-50: #fdf8ec;
+  --color-gold-100: #faecc8;
+  --color-gold-200: #f4d691;
+  --color-gold-300: #ecbd5e;
+  --color-gold-400: #d9a33e;
+  --color-gold-500: #bd8429;
+  --color-gold-600: #976620;
+  --color-gold-700: #714c1a;
+
+  --color-terracotta-50: #fbf0ea;
+  --color-terracotta-100: #f3d8c8;
+  --color-terracotta-200: #e3ad8b;
+  --color-terracotta-300: #cf8159;
+  --color-terracotta-400: #b5552a;
+  --color-terracotta-500: #95431f;
+  --color-terracotta-600: #74331a;
+
+  --color-river-50: #ecf5f6;
+  --color-river-100: #cde6e9;
+  --color-river-200: #9bccd2;
+  --color-river-300: #62a8b2;
+  --color-river-400: #2e6e7e;
+  --color-river-500: #235865;
+  --color-river-600: #1a434c;
+
+  --color-cream: #fbf6ec;
+  --color-cream-dim: #f3ecda;
+  --color-ink: #211c14;
+  --color-ink-soft: #4a4334;
+
+  /* ── Type ─────────────────────────────────────────────── */
+  --font-display: "Fraunces", "Georgia", serif;
+  --font-body: "Plus Jakarta Sans", "Inter", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+@layer base {
+  html {
+    font-family: var(--font-body);
+    color: var(--color-ink);
+    background-color: var(--color-cream);
+  }
+
+  body {
+    margin: 0;
+  }
+
+  ::selection {
+    background-color: var(--color-gold-200);
+    color: var(--color-paddy-900);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-river-400);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+}
+
+@layer utilities {
+  .font-display {
+    font-family: var(--font-display);
+  }
+  .font-mono {
+    font-family: var(--font-mono);
+  }
+
+  /* Hand-stamped wave divider, echoing the river motif under the wordmark */
+  .wave-divider {
+    height: 14px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 14'%3E%3Cpath d='M0 7 Q15 0 30 7 T60 7 T90 7 T120 7' fill='none' stroke='%232E6E7E' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: repeat-x;
+    background-size: 60px 14px;
+    opacity: 0.55;
+  }
+
+  /* Torn-paper edge for the market-tag cards */
+  .tag-notch::before {
+    content: "";
+    position: absolute;
+    top: 14px;
+    left: -7px;
+    width: 14px;
+    height: 14px;
+    background: var(--color-cream);
+    border-radius: 50%;
+    box-shadow: inset -1px 0 2px rgba(0, 0, 0, 0.08);
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: var(--color-paddy-200);
+    border-radius: 999px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
